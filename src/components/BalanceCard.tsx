@@ -1,6 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, ArrowUpRight, Clock, ShieldCheck, Plus, Sparkles, KeyRound, Wallet, Gamepad2, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+
+function useCountUp(targetValue: number, duration: number = 1200) {
+  const [currentValue, setCurrentValue] = useState<number>(0);
+  const prevValueRef = useRef<number>(0);
+
+  useEffect(() => {
+    let startTimestamp: number | null = null;
+    const startValue = prevValueRef.current;
+    const changeInValue = targetValue - startValue;
+
+    if (changeInValue === 0) {
+      setCurrentValue(targetValue);
+      return;
+    }
+
+    let animationFrameId: number;
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      
+      // Easing function: easeOutExpo
+      const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      const nextValue = Math.round(startValue + changeInValue * easeProgress);
+
+      setCurrentValue(nextValue);
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(step);
+      } else {
+        prevValueRef.current = targetValue;
+      }
+    };
+
+    animationFrameId = requestAnimationFrame(step);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [targetValue, duration]);
+
+  return currentValue;
+}
 
 interface BalanceCardProps {
   onWithdraw: () => void;
@@ -35,9 +78,12 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const cashbackBalance = user?.balance ?? 0;
-  const depositBalance = user?.depositBalance ?? 0;
-  const totalCombined = cashbackBalance + depositBalance;
+  const rawCashbackBalance = user?.balance ?? 0;
+  const rawDepositBalance = user?.depositBalance ?? 0;
+
+  // Smooth count-up animated values
+  const animatedCashbackBalance = useCountUp(rawCashbackBalance, 1200);
+  const animatedDepositBalance = useCountUp(rawDepositBalance, 1200);
 
   return (
     <div className="relative w-full mirror-glass-card rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_16px_50px_rgba(10,4,20,0.85)] overflow-hidden specular-shine group">
@@ -90,7 +136,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
           </div>
 
           <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#FFC107] font-mono tracking-tight drop-shadow-[0_2px_10px_rgba(255,193,7,0.3)]">
-            {showBalance ? `₦${cashbackBalance.toLocaleString()}` : '₦ ••••••'}
+            {showBalance ? `₦${animatedCashbackBalance.toLocaleString()}` : '₦ ••••••'}
           </div>
 
           <p className="text-[11px] text-purple-200/80 mt-1.5 flex items-center gap-1">
@@ -113,7 +159,7 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
           </div>
 
           <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#00B875] font-mono tracking-tight drop-shadow-[0_2px_10px_rgba(0,184,117,0.3)]">
-            {showBalance ? `₦${depositBalance.toLocaleString()}` : '₦ ••••••'}
+            {showBalance ? `₦${animatedDepositBalance.toLocaleString()}` : '₦ ••••••'}
           </div>
 
           <p className="text-[11px] text-emerald-200/80 mt-1.5 flex items-center gap-1">
