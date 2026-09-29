@@ -31,22 +31,71 @@ export const TopAlertBanner: React.FC = () => {
   }
 
   return (
-    <aside aria-label="Official verification banner" className="w-full bg-gradient-to-r from-[#4A0C72] via-[#621494] to-[#7E1DC6] text-white py-2 px-3 sm:px-6 shadow-md border-b border-purple-400/30 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 text-xs sm:text-sm font-medium tracking-wide">
-        <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+    <aside aria-label="Official verification banner" className="w-full bg-gradient-to-r from-[#4A0C72] via-[#621494] to-[#7E1DC6] text-white py-1.5 px-3 sm:px-6 shadow-md border-b border-purple-400/30 sticky top-0 z-50 overflow-hidden">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm font-medium tracking-wide">
+        
+        {/* Left Badge Indicator */}
+        <div className="flex items-center gap-2 shrink-0">
           <span className="flex h-2 w-2 rounded-full bg-[#FFC107] animate-ping shrink-0" />
           <ShieldCheck className="w-4 h-4 shrink-0 text-[#FFC107]" />
-          <span className="font-bold tracking-tight uppercase text-[11px] sm:text-xs bg-black/30 px-2 py-0.5 rounded-full border border-purple-300/30 text-purple-200">
+          <span className="font-bold tracking-tight uppercase text-[10px] sm:text-xs bg-black/40 px-2 py-0.5 rounded-full border border-purple-300/30 text-purple-200">
             OFFICIAL PORTAL
-          </span>
-          <span className="truncate font-semibold">
-            PalmPayCashBack — Only valid on <span className="underline decoration-purple-300/80 font-bold text-white">https://www.palmpaycashback.vercel.app</span>
           </span>
         </div>
 
+        {/* Continuous Vertically Moving Text Container */}
+        <div className="flex-1 h-[26px] overflow-hidden relative font-semibold text-xs sm:text-sm">
+          <div className="animate-vertical-ticker w-full">
+            
+            {/* Set 1 */}
+            <div className="h-[26px] flex items-center gap-2 text-white font-semibold whitespace-nowrap">
+              <span>PalmPayCashBack — Only valid on</span>
+              <a 
+                href="https://www.palmpaycashback.vercel.app" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="underline decoration-purple-300 font-bold text-[#FFC107] hover:text-white"
+              >
+                https://www.palmpaycashback.vercel.app
+              </a>
+            </div>
+
+            <div className="h-[26px] flex items-center gap-2 text-purple-100 font-semibold whitespace-nowrap">
+              <span>🛡️ Official CBN Clearance Protocol — 100% Interbank Disburser Channel</span>
+            </div>
+
+            <div className="h-[26px] flex items-center gap-2 text-emerald-300 font-bold whitespace-nowrap">
+              <span>⚡ PalmPay CashBack Vault — Instant Withdrawals to PalmPay Bank</span>
+            </div>
+
+            {/* Set 2 (Duplicate for Seamless Vertical Loop) */}
+            <div className="h-[26px] flex items-center gap-2 text-white font-semibold whitespace-nowrap">
+              <span>PalmPayCashBack — Only valid on</span>
+              <a 
+                href="https://www.palmpaycashback.vercel.app" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="underline decoration-purple-300 font-bold text-[#FFC107] hover:text-white"
+              >
+                https://www.palmpaycashback.vercel.app
+              </a>
+            </div>
+
+            <div className="h-[26px] flex items-center gap-2 text-purple-100 font-semibold whitespace-nowrap">
+              <span>🛡️ Official CBN Clearance Protocol — 100% Interbank Disburser Channel</span>
+            </div>
+
+            <div className="h-[26px] flex items-center gap-2 text-emerald-300 font-bold whitespace-nowrap">
+              <span>⚡ PalmPay CashBack Vault — Instant Withdrawals to PalmPay Bank</span>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Right Action / Security Indicators */}
         <div className="hidden md:flex items-center gap-3 shrink-0 text-xs">
           <span className="bg-black/25 px-2.5 py-0.5 rounded-full backdrop-blur-sm border border-white/20 flex items-center gap-1 font-mono text-purple-200">
-            SSL 256-bit Encrypted
+            SSL 256-bit
           </span>
           <a
             href="https://www.palmpaycashback.vercel.app"
@@ -54,9 +103,10 @@ export const TopAlertBanner: React.FC = () => {
             rel="noopener noreferrer"
             className="hover:underline flex items-center gap-1 opacity-90 hover:opacity-100 font-semibold text-purple-100"
           >
-            Verify Domain <ExternalLink className="w-3 h-3" />
+            Verify <ExternalLink className="w-3 h-3 text-[#FFC107]" />
           </a>
         </div>
+
       </div>
     </aside>
   );

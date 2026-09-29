@@ -98,6 +98,26 @@ body {
   ::-webkit-scrollbar-thumb:hover {
     background: #7E1DC6;
   }
+
+  /* Continuous Vertical Moving Text Keyframes */
+  @keyframes verticalTicker {
+    0% {
+      transform: translateY(0%);
+    }
+    100% {
+      transform: translateY(-50%);
+    }
+  }
+
+  .animate-vertical-ticker {
+    display: flex;
+    flex-direction: column;
+    animation: verticalTicker 12s linear infinite;
+  }
+
+  .animate-vertical-ticker:hover {
+    animation-play-state: paused;
+  }
 }
 
 @keyframes shimmer {
