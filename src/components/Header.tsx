@@ -3,7 +3,6 @@ import { Bell, Settings, Shield, Sparkles, CheckCircle2, AlertCircle, X, Chevron
 import { useAuth } from '../context/AuthContext';
 import { NavigationPage, PlatformNotification } from '../types';
 import { PalmPayLogo } from './PalmPayLogo';
-import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -95,7 +94,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Right Header Action Icons */}
           <div className="flex items-center gap-2 sm:gap-3">
-            <PWAInstallButton variant="compact" />
             
             {user ? (
               <>

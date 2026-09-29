@@ -99,23 +99,23 @@ body {
     background: #7E1DC6;
   }
 
-  /* Continuous Vertical Moving Text Keyframes */
-  @keyframes verticalTicker {
+  /* Continuous Horizontal Moving Text Keyframes */
+  @keyframes horizontalMarquee {
     0% {
-      transform: translateY(0%);
+      transform: translateX(0%);
     }
     100% {
-      transform: translateY(-50%);
+      transform: translateX(-50%);
     }
   }
 
-  .animate-vertical-ticker {
-    display: flex;
-    flex-direction: column;
-    animation: verticalTicker 12s linear infinite;
+  .animate-horizontal-marquee {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: horizontalMarquee 26s linear infinite;
   }
 
-  .animate-vertical-ticker:hover {
+  .animate-horizontal-marquee:hover {
     animation-play-state: paused;
   }
 }

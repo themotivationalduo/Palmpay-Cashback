@@ -31,74 +31,74 @@ export const TopAlertBanner: React.FC = () => {
   }
 
   return (
-    <aside aria-label="Official verification banner" className="w-full bg-gradient-to-r from-[#4A0C72] via-[#621494] to-[#7E1DC6] text-white py-1.5 px-3 sm:px-6 shadow-md border-b border-purple-400/30 sticky top-0 z-50 overflow-hidden">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 text-xs sm:text-sm font-medium tracking-wide">
+    <aside aria-label="Official verification banner" className="w-full bg-gradient-to-r from-[#4A0C72] via-[#621494] to-[#7E1DC6] text-white py-2 px-3 sm:px-6 shadow-md border-b border-purple-400/30 sticky top-0 z-50 overflow-hidden">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 text-xs sm:text-sm font-medium tracking-wide">
         
         {/* Left Badge Indicator */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 z-10 bg-gradient-to-r from-[#4A0C72] to-[#621494] pr-3 py-0.5">
           <span className="flex h-2 w-2 rounded-full bg-[#FFC107] animate-ping shrink-0" />
           <ShieldCheck className="w-4 h-4 shrink-0 text-[#FFC107]" />
-          <span className="font-bold tracking-tight uppercase text-[10px] sm:text-xs bg-black/40 px-2 py-0.5 rounded-full border border-purple-300/30 text-purple-200">
+          <span className="font-bold tracking-tight uppercase text-[10px] sm:text-xs bg-black/40 px-2.5 py-0.5 rounded-full border border-purple-300/30 text-purple-200">
             OFFICIAL PORTAL
           </span>
         </div>
 
-        {/* Continuous Vertically Moving Text Container */}
-        <div className="flex-1 h-[26px] overflow-hidden relative font-semibold text-xs sm:text-sm">
-          <div className="animate-vertical-ticker w-full">
+        {/* Continuous Horizontally Moving Text Container */}
+        <div className="flex-1 overflow-hidden relative font-semibold text-xs sm:text-sm mx-1 sm:mx-2 cursor-pointer">
+          <div className="animate-horizontal-marquee inline-flex items-center gap-12 select-none">
             
             {/* Set 1 */}
-            <div className="h-[26px] flex items-center gap-2 text-white font-semibold whitespace-nowrap">
+            <span className="flex items-center gap-2 text-white">
               <span>PalmPayCashBack — Only valid on</span>
               <a 
-                href="https://www.palmpaycashback.vercel.app" 
+                href="https://www.palmpay-cashback.vercel.app" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="underline decoration-purple-300 font-bold text-[#FFC107] hover:text-white"
+                className="underline decoration-[#FFC107] font-bold text-[#FFC107] hover:text-white"
               >
-                https://www.palmpaycashback.vercel.app
+                https://www.palmpay-cashback.vercel.app
               </a>
-            </div>
+            </span>
 
-            <div className="h-[26px] flex items-center gap-2 text-purple-100 font-semibold whitespace-nowrap">
+            <span className="flex items-center gap-2 text-purple-200">
               <span>🛡️ Official CBN Clearance Protocol — 100% Interbank Disburser Channel</span>
-            </div>
+            </span>
 
-            <div className="h-[26px] flex items-center gap-2 text-emerald-300 font-bold whitespace-nowrap">
+            <span className="flex items-center gap-2 text-emerald-300">
               <span>⚡ PalmPay CashBack Vault — Instant Withdrawals to PalmPay Bank</span>
-            </div>
+            </span>
 
-            {/* Set 2 (Duplicate for Seamless Vertical Loop) */}
-            <div className="h-[26px] flex items-center gap-2 text-white font-semibold whitespace-nowrap">
+            {/* Set 2 (Duplicate for Seamless Endless Horizontal Marquee Loop) */}
+            <span className="flex items-center gap-2 text-white">
               <span>PalmPayCashBack — Only valid on</span>
               <a 
-                href="https://www.palmpaycashback.vercel.app" 
+                href="https://www.palmpay-cashback.vercel.app" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="underline decoration-purple-300 font-bold text-[#FFC107] hover:text-white"
+                className="underline decoration-[#FFC107] font-bold text-[#FFC107] hover:text-white"
               >
-                https://www.palmpaycashback.vercel.app
+                https://www.palmpay-cashback.vercel.app
               </a>
-            </div>
+            </span>
 
-            <div className="h-[26px] flex items-center gap-2 text-purple-100 font-semibold whitespace-nowrap">
+            <span className="flex items-center gap-2 text-purple-200">
               <span>🛡️ Official CBN Clearance Protocol — 100% Interbank Disburser Channel</span>
-            </div>
+            </span>
 
-            <div className="h-[26px] flex items-center gap-2 text-emerald-300 font-bold whitespace-nowrap">
+            <span className="flex items-center gap-2 text-emerald-300">
               <span>⚡ PalmPay CashBack Vault — Instant Withdrawals to PalmPay Bank</span>
-            </div>
+            </span>
 
           </div>
         </div>
 
         {/* Right Action / Security Indicators */}
-        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs">
+        <div className="hidden md:flex items-center gap-3 shrink-0 text-xs z-10 bg-gradient-to-l from-[#7E1DC6] to-[#621494] pl-3 py-0.5">
           <span className="bg-black/25 px-2.5 py-0.5 rounded-full backdrop-blur-sm border border-white/20 flex items-center gap-1 font-mono text-purple-200">
             SSL 256-bit
           </span>
           <a
-            href="https://www.palmpaycashback.vercel.app"
+            href="https://www.palmpay-cashback.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:underline flex items-center gap-1 opacity-90 hover:opacity-100 font-semibold text-purple-100"

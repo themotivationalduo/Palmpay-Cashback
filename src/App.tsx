@@ -12,9 +12,7 @@ import { Header } from './components/Header';
 import { FloatingBottomNav } from './components/FloatingBottomNav';
 import { UserPersonalizationHeader } from './components/UserPersonalizationHeader';
 import { BalanceCard } from './components/BalanceCard';
-import { PromoBanner } from './components/PromoBanner';
 import { RewardInitiatives } from './components/RewardInitiatives';
-import { QuickActionsGrid } from './components/QuickActionsGrid';
 import { TransactionsLedger } from './components/TransactionsLedger';
 import { SpinBottleGame } from './components/SpinBottleGame';
 import { BuyCashbackCodeModal } from './components/BuyCashbackCodeModal';
@@ -28,8 +26,6 @@ import { CommunityModal, AddMoneyModal, SupportModal } from './components/Modals
 import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDetailModal } from './components/NotificationDetailModal';
-import { TopReferrersLeaderboard } from './components/TopReferrersLeaderboard';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { NavigationPage, PlatformNotification } from './types';
 import { Sparkles, ShieldCheck, KeyRound, Award } from 'lucide-react';
 
@@ -62,30 +58,8 @@ const DashboardContent: React.FC<{
       {currentPage === 'dashboard' && (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
           
-          {/* PWA Install Promo Banner */}
-          <PWAInstallButton variant="banner" />
-
           {/* User Personalization Header: "Good afternoon, 👋" */}
           <UserPersonalizationHeader />
-
-          {/* Quick Notification Pill to view verification status */}
-          <div className="flex items-center justify-between p-3 rounded-2xl mirror-glass border border-purple-500/30 text-xs">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <span className="p-1 rounded-lg bg-purple-500/20 text-[#A855F7]">
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-              </span>
-              <span className="text-purple-200 truncate">
-                Withdrawal clearance pass: <strong className="text-white">Active &amp; Ready</strong>
-              </span>
-            </div>
-            <button
-              onClick={onOpenVerification}
-              className="text-[#FFC107] hover:underline font-bold shrink-0 ml-2 flex items-center gap-1"
-            >
-              <span>View Code</span>
-              <KeyRound className="w-3.5 h-3.5" />
-            </button>
-          </div>
 
           {/* Balance & Withdrawal Card */}
           <BalanceCard
@@ -95,25 +69,8 @@ const DashboardContent: React.FC<{
             onViewHistory={() => setCurrentPage('transactions')}
           />
 
-          {/* High-impact Promotional Banner Section */}
-          <PromoBanner onExplore={() => setCurrentPage('game')} />
-
           {/* Reward Initiatives & Perks (Welcome bonus, Daily claim, Refer & earn) */}
           <RewardInitiatives onOpenReferralModal={onOpenSettings} />
-
-          {/* Quick Actions Navigation Grid (6-card interactive hub) */}
-          <QuickActionsGrid
-            onSelectAction={(action) => {
-              if (action === 'community') onOpenCommunity();
-              else if (action === 'add_money') onOpenAddMoney();
-              else if (action === 'support') onOpenSupport();
-              else if (action === 'refer_earn') onOpenSettings();
-            }}
-            setCurrentPage={setCurrentPage}
-          />
-
-          {/* Gamified Top Referrers Leaderboard */}
-          <TopReferrersLeaderboard onOpenProfile={onOpenSettings} />
 
           {/* Activity & History Ledger ("Recent Transactions" with "View All") */}
           <TransactionsLedger
