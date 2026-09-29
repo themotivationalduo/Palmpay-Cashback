@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="palmpayPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#7B1BBF" />
+      <stop offset="50%" stopColor="#621494" />
+      <stop offset="100%" stopColor="#4E0D78" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#621494" flood-opacity="0.5"/>
+    </filter>
+  </defs>
+
+  <!-- PalmPay Rounded Hexagon Base -->
+  <path d="M 250,45 
+           C 265,45 375,108 385,118 
+           C 395,128 440,230 440,250 
+           C 440,270 395,372 385,382 
+           C 375,392 265,455 250,455 
+           C 235,455 125,392 115,382 
+           C 105,372 60,270 60,250 
+           C 60,230 105,128 115,118 
+           C 125,108 235,45 250,45 Z" 
+        fill="url(#palmpayPurple)" 
+        filter="url(#glow)"/>
+
+  <!-- PalmPay Intertwined White Geometric Loops -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Upper loop pointing down-left -->
+    <path d="M 255,130 L 335,210 L 255,290" />
+    <!-- Lower loop pointing up-right -->
+    <path d="M 245,370 L 165,290 L 245,210" />
+  </g>
+
+  <!-- Center Diamond Square Accent -->
+  <polygon points="250,232 268,250 250,268 232,250" fill="#FFFFFF" />
+</svg>

@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overflow-x: hidden;
+  background-color: #0B0614;
+  color: #F1F5F9;
+}
+
+@layer utilities {
+  /* Real PalmPay Mirror Glass Base Styling - GPU Accelerated */
+  .mirror-glass {
+    background: rgba(22, 14, 36, 0.7);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(168, 85, 247, 0.18);
+    box-shadow: 0 8px 32px 0 rgba(10, 4, 18, 0.6), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  .mirror-glass-card {
+    background: linear-gradient(135deg, rgba(32, 18, 52, 0.75) 0%, rgba(18, 10, 30, 0.85) 100%);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(168, 85, 247, 0.22);
+    box-shadow: 0 14px 45px -4px rgba(0, 0, 0, 0.7), inset 0 1px 2px 0 rgba(255, 255, 255, 0.2);
+    transform: translateZ(0);
+  }
+
+  .mirror-glass-palmpay {
+    background: linear-gradient(135deg, rgba(98, 20, 148, 0.45) 0%, rgba(30, 12, 48, 0.8) 100%);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    box-shadow: 0 12px 40px -4px rgba(98, 20, 148, 0.35), inset 0 1px 2px 0 rgba(220, 175, 255, 0.25);
+    transform: translateZ(0);
+  }
+
+  .mirror-glass-gold {
+    background: linear-gradient(135deg, rgba(48, 36, 12, 0.65) 0%, rgba(24, 18, 8, 0.8) 100%);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 193, 7, 0.32);
+    box-shadow: 0 12px 40px -4px rgba(255, 193, 7, 0.18), inset 0 1px 2px 0 rgba(255, 220, 100, 0.3);
+    transform: translateZ(0);
+  }
+
+  .mirror-glass-nav {
+    background: rgba(20, 12, 34, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(168, 85, 247, 0.28);
+    box-shadow: 0 18px 50px -5px rgba(0, 0, 0, 0.85), inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
+    transform: translateZ(0);
+    will-change: transform, opacity;
+  }
+
+  /* Specular reflection sheen */
+  .specular-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .specular-shine::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transform: skewX(-25deg);
+    pointer-events: none;
+    transition: 0.75s ease;
+  }
+  .specular-shine:hover::after {
+    left: 150%;
+  }
+
+  /* Custom subtle scrollbar with PalmPay purple thumb */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0B0614;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(168, 85, 247, 0.3);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #7E1DC6;
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) skewX(-25deg); }
+  100% { transform: translateX(200%) skewX(-25deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.08); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2.5s infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+

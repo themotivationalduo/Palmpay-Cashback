@@ -1,0 +1,6 @@
+{
+  "name": "PalmPay Cashback — Official Rewards & Cashback Portal",
+  "description": "High-fidelity dark-mode web dashboard for PalmPay Cashback with real-time balance tracking, Spin da' Bottle gaming rewards, Cashback Code verification, and Admin controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
