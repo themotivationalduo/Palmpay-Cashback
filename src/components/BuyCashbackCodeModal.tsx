@@ -328,7 +328,7 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
               type="text"
               value={inputCode}
               onChange={(e) => setInputCode(e.target.value)}
-              placeholder="e.g. palm_386_cash_737"
+              placeholder="Enter purchased code"
               className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
               required
             />

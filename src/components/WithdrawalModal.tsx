@@ -185,7 +185,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
       triggerCelebration({
         title: 'Withdrawal Submitted! 💸',
-        subtitle: `₦${Number(amount).toLocaleString()} payout request is being disbursed to ${accountName.trim()} (${bankName}).`,
+        subtitle: 'Your transaction is pending and will be approved within 24-48 hours. Deposits take 10-30 minutes due to high request volume.',
         type: 'withdrawal',
         amount: `₦${Number(amount).toLocaleString()}`,
         duration: 4500
@@ -533,7 +533,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 type="text"
                 value={enteredCode}
                 onChange={(e) => setEnteredCode(e.target.value)}
-                placeholder="Enter CashBack Code (e.g. palm_386_cash_737)"
+                placeholder="Enter CashBack Code"
                 className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] text-center"
                 required
               />
