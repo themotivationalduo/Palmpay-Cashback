@@ -74,18 +74,18 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
     setDepLoading(true);
 
     try {
-      const code = await buyCashbackCodeWithDepositBalance();
-      setSuccessMessage(`CashBack Code (${code}) purchased and activated successfully using your Deposited Balance!`);
+      await buyCashbackCodeWithDepositBalance();
+      setSuccessMessage('CashBack Code purchase submitted (₦8,550). Pending Admin Approval on Control Panel. Once approved, your code will be revealed in your account.');
       
       triggerCelebration({
-        title: 'CashBack Code Activated! 🔑',
-        subtitle: `Code "${code}" is now linked to your account. Your withdrawal access is cleared!`,
+        title: 'Order Submitted for Approval! ⌛',
+        subtitle: 'Your CashBack Code purchase was placed on pending. It will be revealed upon Admin approval.',
         type: 'code',
         duration: 4500
       });
 
       if (onCodePurchased) {
-        onCodePurchased(code);
+        onCodePurchased('Pending Admin Approval');
       }
     } catch (err: any) {
       setError(err.message || 'Error processing purchase from deposited balance.');
@@ -186,7 +186,7 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
               ₦8,550
             </span>
             <span className="text-[11px] text-slate-300 block mt-0.5">
-              Code: <span className="text-[#FFC107] font-mono font-bold">{OFFICIAL_CASHBACK_CODE}</span>
+              Code Status: <span className="text-[#FFC107] font-mono font-bold">{user?.hasActiveCode && activeCode ? activeCode : 'Revealed upon Admin Approval'}</span>
             </span>
           </div>
 

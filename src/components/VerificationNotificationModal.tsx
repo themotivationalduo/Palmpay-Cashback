@@ -19,10 +19,14 @@ export const VerificationNotificationModal: React.FC<VerificationNotificationMod
 
   if (!isOpen) return null;
 
-  const rawCode = user?.activeCashbackCode || '';
-  const maskedCode = revealCode ? rawCode : (rawCode ? 'PALM-CB-••••-••••' : 'No active code');
+  const hasApprovedCode = user?.hasActiveCode && user?.activeCashbackCode;
+  const rawCode = hasApprovedCode ? user.activeCashbackCode! : '';
+  const maskedCode = hasApprovedCode
+    ? (revealCode ? rawCode : 'PALM-CB-••••-••••')
+    : 'Hidden (Requires Purchase & Admin Approval)';
 
   const handleCopy = () => {
+    if (!hasApprovedCode) return;
     navigator.clipboard.writeText(rawCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

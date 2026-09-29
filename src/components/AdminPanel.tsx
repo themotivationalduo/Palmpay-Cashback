@@ -36,6 +36,10 @@ export const AdminPanel: React.FC = () => {
     purgeAllRecords, 
     approveDepositRequest, 
     rejectDepositRequest, 
+    approveWithdrawalRequest,
+    rejectWithdrawalRequest,
+    approveCodeOrder,
+    rejectCodeOrder,
     depositRequests,
     overrideUserBalance,
     getAllUsersForAdmin
@@ -148,15 +152,12 @@ export const AdminPanel: React.FC = () => {
   }, []);
 
   const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
-    setWithdrawals((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, status: newStatus, processedAt: Date.now() } : w))
-    );
-
     try {
-      await updateDoc(doc(db, 'withdrawal_requests', id), {
-        status: newStatus,
-        processedAt: Date.now()
-      });
+      if (newStatus === 'approved') {
+        await approveWithdrawalRequest(id);
+      } else {
+        await rejectWithdrawalRequest(id, 'Declined by Admin');
+      }
     } catch (err) {
       console.warn('Update withdrawal Firestore error:', err);
     }
@@ -653,7 +654,7 @@ export const AdminPanel: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-sm sm:text-base font-bold text-white flex items-center justify-between">
             <span>CashBack Code Orders (₦8,550 fee)</span>
-            <span className="text-xs text-[#FFC107] font-mono font-normal">Active Code: palm_386_cash_737</span>
+            <span className="text-xs text-[#FFC107] font-mono font-normal">Pending Orders: {codes.filter(c => c.status === 'pending').length}</span>
           </h3>
 
           <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
@@ -667,7 +668,13 @@ export const AdminPanel: React.FC = () => {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sm text-white">{c.generatedCode}</span>
-                      <span className="text-[10px] font-black uppercase bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                      <span className={`text-[10px] font-black uppercase border px-2 py-0.5 rounded-full ${
+                        c.status === 'approved'
+                          ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                          : c.status === 'rejected'
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                          : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                      }`}>
                         {c.status}
                       </span>
                       {c.paymentSource && (
@@ -681,7 +688,7 @@ export const AdminPanel: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between md:justify-end gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptData({
@@ -699,6 +706,34 @@ export const AdminPanel: React.FC = () => {
                       <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
                       <span>View Receipt</span>
                     </button>
+
+                    {c.status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            await approveCodeOrder(c.id);
+                            triggerCelebration({
+                              title: 'CashBack Code Approved! 🔑',
+                              subtitle: `Code order for ${c.userEmail} approved and code activated.`,
+                              type: 'code',
+                              duration: 3500
+                            });
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approve &amp; Reveal Code</span>
+                        </button>
+
+                        <button
+                          onClick={() => rejectCodeOrder(c.id, 'Unverified payment')}
+                          className="px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    )}
 
                     <div className="text-right">
                       <span className="text-base font-bold text-[#FFC107] font-mono">

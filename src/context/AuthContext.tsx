@@ -69,6 +69,8 @@ interface AuthContextType {
   buyCashbackCode: () => Promise<string>;
   buyCashbackCodeWithDepositBalance: () => Promise<string>;
   activateCashbackCode: (code: string) => Promise<boolean>;
+  approveCodeOrder: (orderId: string, customCode?: string) => Promise<void>;
+  rejectCodeOrder: (orderId: string, reason?: string) => Promise<void>;
 
   // Deposit Management
   submitDepositRequest: (details: { amount: number; receiptImage: string; paymentReference?: string }) => Promise<string>;
@@ -85,6 +87,8 @@ interface AuthContextType {
     cashbackCode: string;
     balanceSource: 'cashback' | 'deposit';
   }) => Promise<string>;
+  approveWithdrawalRequest: (requestId: string) => Promise<void>;
+  rejectWithdrawalRequest: (requestId: string, reason?: string) => Promise<void>;
 
   transactions: Transaction[];
   notificationsCount: number;
@@ -1008,39 +1012,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Buy Cashback code via Paystack payment link
   const buyCashbackCode = async (): Promise<string> => {
     if (!user) throw new Error('User not logged in');
-    const generatedCode = OFFICIAL_CASHBACK_CODE;
-
-    setUser((prev) => (prev ? {
-      ...prev,
-      hasActiveCode: true,
-      activeCashbackCode: generatedCode
-    } : null));
 
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        hasActiveCode: true,
-        activeCashbackCode: generatedCode
-      });
       await addDoc(collection(db, 'code_orders'), {
         uid: user.uid,
         userEmail: user.email,
         codePrice: 8550,
-        generatedCode,
-        status: 'approved',
+        generatedCode: 'Pending Admin Approval',
+        status: 'pending',
         paymentSource: 'paystack',
         paymentReference: 'PAYSTACK-' + Date.now(),
         createdAt: Date.now()
       });
 
       addNotification({
-        title: 'CashBack Code Purchased & Active',
-        message: `Your CashBack Code ${generatedCode} has been purchased successfully and is active for withdrawals.`,
+        title: 'CashBack Code Order Submitted ⌛',
+        message: 'Your ₦8,550 CashBack Code purchase was submitted successfully. It is pending Admin approval on the Control Panel before your code is revealed.',
         type: 'code',
         fullDetails: {
           type: 'code',
-          code: generatedCode,
+          code: 'Pending Admin Approval',
           amount: 8550,
-          status: 'approved',
+          status: 'pending',
           reference: 'PAYSTACK-' + Date.now()
         }
       });
@@ -1048,7 +1041,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firestore code order save error:', err);
     }
 
-    return generatedCode;
+    return 'pending';
   };
 
   // Buy Cashback code directly from Deposited Balance (₦8,550)
@@ -1061,39 +1054,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await updateBalance(-8550, 'Buy CashBack Code with Deposit Balance (₦8,550)', 'code_purchase', 'debit', 'deposit');
 
-    const generatedCode = OFFICIAL_CASHBACK_CODE;
-
-    setUser((prev) => (prev ? {
-      ...prev,
-      hasActiveCode: true,
-      activeCashbackCode: generatedCode
-    } : null));
-
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        hasActiveCode: true,
-        activeCashbackCode: generatedCode
-      });
       await addDoc(collection(db, 'code_orders'), {
         uid: user.uid,
         userEmail: user.email,
         codePrice: 8550,
-        generatedCode,
-        status: 'approved',
+        generatedCode: 'Pending Admin Approval',
+        status: 'pending',
         paymentSource: 'deposit_balance',
         paymentReference: 'DEP-BAL-' + Date.now(),
         createdAt: Date.now()
       });
 
       addNotification({
-        title: 'CashBack Code Purchased & Active',
-        message: `Your CashBack Code ${generatedCode} has been purchased using your deposit balance and is active.`,
+        title: 'CashBack Code Order Submitted ⌛',
+        message: 'Your ₦8,550 CashBack Code purchase via deposit balance was submitted and is pending Admin approval. Once approved on the Control Panel, your code will be revealed in your account.',
         type: 'code',
         fullDetails: {
           type: 'code',
-          code: generatedCode,
+          code: 'Pending Admin Approval',
           amount: 8550,
-          status: 'approved',
+          status: 'pending',
           reference: 'DEP-BAL-' + Date.now()
         }
       });
@@ -1101,41 +1082,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firestore code order save error:', err);
     }
 
-    return generatedCode;
+    return 'pending';
   };
 
-  // Activate Cashback code
+  // Activate / Manual submit Cashback code
   const activateCashbackCode = async (code: string): Promise<boolean> => {
     if (!user) throw new Error('User not logged in');
-    const cleanCode = code.trim().toLowerCase();
-    
-    // Accept official code palm_386_cash_737 or general valid format
+    const cleanCode = code.trim();
+
     if (!cleanCode || cleanCode.length < 5) {
       throw new Error('Please enter a valid CashBack Code.');
     }
 
-    const finalCode = cleanCode === OFFICIAL_CASHBACK_CODE.toLowerCase() ? OFFICIAL_CASHBACK_CODE : cleanCode;
-
-    setUser((prev) => (prev ? {
-      ...prev,
-      hasActiveCode: true,
-      activeCashbackCode: finalCode
-    } : null));
-
     try {
       if (user.uid) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          hasActiveCode: true,
-          activeCashbackCode: finalCode
-        });
         await addDoc(collection(db, 'code_orders'), {
           uid: user.uid,
           userEmail: user.email,
           codePrice: 8550,
-          generatedCode: finalCode,
-          status: 'approved',
-          paymentReference: 'PAYSTACK-' + Date.now(),
+          generatedCode: cleanCode,
+          status: 'pending',
+          paymentReference: 'MANUAL-' + Date.now(),
           createdAt: Date.now()
+        });
+
+        addNotification({
+          title: 'CashBack Code Submitted ⌛',
+          message: `CashBack Code (${cleanCode}) submitted for Admin verification. It will be activated upon approval on the Control Panel.`,
+          type: 'code'
         });
       }
     } catch (err) {
@@ -1143,6 +1117,90 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return true;
+  };
+
+  // Admin approves code order -> assigns & reveals activeCashbackCode
+  const approveCodeOrder = async (orderId: string, customCode?: string) => {
+    try {
+      const docRef = doc(db, 'code_orders', orderId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+
+      const orderData = docSnap.data() as CodeOrder;
+      const finalCode = customCode || OFFICIAL_CASHBACK_CODE;
+
+      await updateDoc(docRef, {
+        status: 'approved',
+        generatedCode: finalCode,
+        approvedAt: Date.now()
+      });
+
+      const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
+      if (targetUserDoc.exists()) {
+        await updateDoc(doc(db, 'users', orderData.uid), {
+          hasActiveCode: true,
+          activeCashbackCode: finalCode
+        });
+      }
+
+      if (user?.uid === orderData.uid) {
+        setUser((prev) => (prev ? {
+          ...prev,
+          hasActiveCode: true,
+          activeCashbackCode: finalCode
+        } : null));
+      }
+
+      addNotification({
+        title: 'CashBack Code Revealed & Activated! 🔑',
+        message: `Your CashBack Code (${finalCode}) has been approved by Admin and is now revealed in your account!`,
+        type: 'code',
+        fullDetails: {
+          type: 'code',
+          code: finalCode,
+          amount: orderData.codePrice || 8550,
+          status: 'approved',
+          reference: orderData.paymentReference || 'APPROVED'
+        }
+      });
+    } catch (err) {
+      console.warn('Approve code order error:', err);
+    }
+  };
+
+  // Admin rejects code order
+  const rejectCodeOrder = async (orderId: string, reason?: string) => {
+    try {
+      const docRef = doc(db, 'code_orders', orderId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+
+      const orderData = docSnap.data() as CodeOrder;
+
+      await updateDoc(docRef, {
+        status: 'rejected',
+        adminNote: reason || 'Order rejected by Admin.',
+        rejectedAt: Date.now()
+      });
+
+      // Refund if deposit balance was used
+      if (orderData.paymentSource === 'deposit_balance') {
+        const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
+        if (targetUserDoc.exists()) {
+          const u = targetUserDoc.data() as UserProfile;
+          const refundedDep = (u.depositBalance || 0) + (orderData.codePrice || 8550);
+          await updateDoc(doc(db, 'users', orderData.uid), { depositBalance: refundedDep });
+        }
+      }
+
+      addNotification({
+        title: 'CashBack Code Purchase Declined',
+        message: `Your CashBack Code purchase was declined by Admin. ${reason || ''}`,
+        type: 'reject'
+      });
+    } catch (err) {
+      console.warn('Reject code order error:', err);
+    }
   };
 
   // Submit Deposit Request for Admin Approval
@@ -1279,7 +1337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Request Withdrawal with Balance Source Selection
+  // Request Withdrawal: Creates pending request WITHOUT deducting balance until Admin Approval
   const requestWithdrawal = async (details: {
     bankName: string;
     accountNumber: string;
@@ -1290,11 +1348,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }): Promise<string> => {
     if (!user) throw new Error('User not logged in');
 
-    // Strict enforcement: Users must purchase and input Cashback code before they can withdraw any funds
     const cleanCode = (details.cashbackCode || '').trim();
     if (!cleanCode || cleanCode.length < 5) {
       throw new Error(
-        'CashBack code required. In compliance with CBN automated clearing policy, you must purchase and input your CashBack Code (e.g. palm_386_cash_737) before you can withdraw funds.'
+        'CashBack code required. In compliance with CBN automated clearing policy, you must enter your approved CashBack Code before you can withdraw funds.'
       );
     }
 
@@ -1304,15 +1361,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const reqRef = 'WD-' + Date.now().toString().slice(-6);
-
-    // Deduct from the selected balance
-    await updateBalance(
-      -details.amount,
-      `Withdrawal from ${details.balanceSource === 'deposit' ? 'Deposited' : 'CashBack'} Balance to ${details.bankName} (${details.accountNumber.slice(0, 3)}***)`,
-      'withdrawal',
-      'debit',
-      details.balanceSource
-    );
 
     try {
       await addDoc(collection(db, 'withdrawal_requests'), {
@@ -1324,15 +1372,121 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         amount: details.amount,
         balanceSource: details.balanceSource,
         cashbackCode: cleanCode,
-        status: 'approved',
+        status: 'pending',
         createdAt: Date.now(),
         reference: reqRef
+      });
+
+      addNotification({
+        title: 'Withdrawal Request Submitted ⏳',
+        message: `Your withdrawal request of ₦${details.amount.toLocaleString()} to ${details.bankName} (${details.accountNumber}) was submitted and placed on PENDING. Balance will update upon Admin approval.`,
+        type: 'system',
+        fullDetails: {
+          type: 'withdrawal',
+          amount: details.amount,
+          status: 'pending',
+          reference: reqRef
+        }
       });
     } catch (err) {
       console.warn('Firestore withdrawal request err:', err);
     }
 
     return reqRef;
+  };
+
+  // Admin approves withdrawal request -> Debits user's balance and creates completed transaction record
+  const approveWithdrawalRequest = async (requestId: string) => {
+    try {
+      const docRef = doc(db, 'withdrawal_requests', requestId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) throw new Error('Withdrawal request not found.');
+
+      const reqData = docSnap.data() as WithdrawalRequest;
+      if (reqData.status === 'approved') return;
+
+      await updateDoc(docRef, {
+        status: 'approved',
+        processedAt: Date.now()
+      });
+
+      // Deduct balance from target user upon approval
+      const targetUserDoc = await getDoc(doc(db, 'users', reqData.uid));
+      if (targetUserDoc.exists()) {
+        const u = targetUserDoc.data() as UserProfile;
+        const source = reqData.balanceSource || 'cashback';
+
+        if (source === 'deposit') {
+          const newDep = Math.max(0, (u.depositBalance || 0) - reqData.amount);
+          await updateDoc(doc(db, 'users', reqData.uid), { depositBalance: newDep });
+        } else {
+          const newBal = Math.max(0, (u.balance || 0) - reqData.amount);
+          await updateDoc(doc(db, 'users', reqData.uid), { balance: newBal });
+        }
+
+        // Add completed debit transaction
+        await addDoc(collection(db, 'transactions'), {
+          uid: reqData.uid,
+          email: reqData.userEmail,
+          title: `Withdrawal Disbursed (₦${reqData.amount.toLocaleString()}) to ${reqData.bankName}`,
+          amount: reqData.amount,
+          type: 'debit',
+          category: 'withdrawal',
+          balanceSource: reqData.balanceSource || 'cashback',
+          timestamp: Date.now(),
+          status: 'completed',
+          reference: reqData.reference || 'WD-APP-' + Date.now()
+        });
+
+        if (user?.uid === reqData.uid) {
+          setUser((prev) => {
+            if (!prev) return null;
+            return source === 'deposit'
+              ? { ...prev, depositBalance: Math.max(0, (prev.depositBalance || 0) - reqData.amount) }
+              : { ...prev, balance: Math.max(0, prev.balance - reqData.amount) };
+          });
+        }
+      }
+
+      addNotification({
+        title: `Withdrawal Approved & Disbursed! 💸`,
+        message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to ${reqData.bankName} (${reqData.accountNumber}) has been approved and disbursed.`,
+        type: 'withdrawal',
+        fullDetails: {
+          type: 'withdrawal',
+          amount: reqData.amount,
+          status: 'approved',
+          reference: reqData.reference
+        }
+      });
+    } catch (err) {
+      console.warn('Approve withdrawal error:', err);
+    }
+  };
+
+  // Admin rejects withdrawal request
+  const rejectWithdrawalRequest = async (requestId: string, reason?: string) => {
+    try {
+      const docRef = doc(db, 'withdrawal_requests', requestId);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) return;
+
+      const reqData = docSnap.data() as WithdrawalRequest;
+
+      await updateDoc(docRef, {
+        status: 'rejected',
+        adminNote: reason || 'Declined by Admin.',
+        processedAt: Date.now()
+      });
+
+      addNotification({
+        title: `Withdrawal Request Declined`,
+        message: `Your withdrawal request of ₦${reqData.amount.toLocaleString()} was declined by Admin. ${reason || ''}`,
+        type: 'reject'
+      });
+    } catch (err) {
+      console.warn('Reject withdrawal error:', err);
+    }
   };
 
   const overrideUserBalance = async (
@@ -1531,11 +1685,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         buyCashbackCode,
         buyCashbackCodeWithDepositBalance,
         activateCashbackCode,
+        approveCodeOrder,
+        rejectCodeOrder,
         submitDepositRequest,
         approveDepositRequest,
         rejectDepositRequest,
         depositRequests,
         requestWithdrawal,
+        approveWithdrawalRequest,
+        rejectWithdrawalRequest,
         transactions,
         notificationsCount: notifications.filter(n => n.unread).length,
         notifications,
