@@ -29,6 +29,7 @@ import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDetailModal } from './components/NotificationDetailModal';
 import { TopReferrersLeaderboard } from './components/TopReferrersLeaderboard';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { NavigationPage, PlatformNotification } from './types';
 import { Sparkles, ShieldCheck, KeyRound, Award } from 'lucide-react';
 
@@ -61,6 +62,9 @@ const DashboardContent: React.FC<{
       {currentPage === 'dashboard' && (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
           
+          {/* PWA Install Promo Banner */}
+          <PWAInstallButton variant="banner" />
+
           {/* User Personalization Header: "Good afternoon, 👋" */}
           <UserPersonalizationHeader />
 

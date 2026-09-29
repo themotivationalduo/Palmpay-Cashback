@@ -3,6 +3,7 @@ import { Mail, Lock, User, Phone, Hash, ArrowRight, ShieldCheck, Sparkles, Check
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { PalmPayLogo } from './PalmPayLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface AuthScreenProps {
   onSuccess?: () => void;
@@ -269,8 +270,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             </button>
           </form>
 
-          {/* Social Sign In & Contact Us */}
+          {/* Social Sign In & Contact Us & PWA Install */}
           <div className="mt-5 pt-4 border-t border-purple-500/20 space-y-2.5">
+            <PWAInstallButton variant="banner" />
+
             <button
               type="button"
               onClick={handleGoogleSignIn}

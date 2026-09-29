@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface SettingsProfileModalProps {
   isOpen: boolean;
@@ -259,6 +260,11 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
                 }`}
               />
             </button>
+          </div>
+
+          {/* Install Web App Option */}
+          <div className="pt-1">
+            <PWAInstallButton variant="banner" />
           </div>
 
           {/* WhatsApp Support Channel */}
