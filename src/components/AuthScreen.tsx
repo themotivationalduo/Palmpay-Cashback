@@ -269,7 +269,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             </button>
           </form>
 
-          {/* Social Sign In */}
+          {/* Social Sign In & Contact Us */}
           <div className="mt-5 pt-4 border-t border-purple-500/20 space-y-2.5">
             <button
               type="button"
@@ -283,6 +283,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
               <span>Continue with Google</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.open('https://whatsapp.com/channel/0029Vb7iKzx9Gv7YcWX4Vv1C', '_blank', 'noopener,noreferrer')}
+              className="w-full py-2.5 rounded-xl bg-[#02E680]/15 hover:bg-[#02E680]/25 text-[#02E680] hover:text-white text-xs font-bold flex items-center justify-center gap-2 border border-[#02E680]/35 transition-all shadow-sm active:scale-95"
+            >
+              <Phone className="w-4 h-4 text-[#02E680]" />
+              <span>Contact Us (WhatsApp Channel)</span>
             </button>
           </div>
 

@@ -52,10 +52,10 @@ export const Footer: React.FC = () => {
             </button>
             <span>•</span>
             <button
-              onClick={() => setModalType('contact')}
-              className="hover:text-white transition-colors underline decoration-slate-600 hover:decoration-white"
+              onClick={() => window.open('https://whatsapp.com/channel/0029Vb7iKzx9Gv7YcWX4Vv1C', '_blank', 'noopener,noreferrer')}
+              className="hover:text-white transition-colors underline decoration-slate-600 hover:decoration-white font-bold text-[#02E680]"
             >
-              Contact Us
+              Contact Us (WhatsApp Channel)
             </button>
           </div>
 

@@ -1,21 +1,33 @@
 import React, { useState } from 'react';
-import { History, ArrowDownLeft, ArrowUpRight, Sparkles, Filter, Search, ChevronRight, CheckCircle2, Clock, X, ExternalLink, ShieldAlert } from 'lucide-react';
+import { History, ArrowDownLeft, ArrowUpRight, Search, ChevronRight, CheckCircle2, Clock, X, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Transaction } from '../types';
 
 interface TransactionsLedgerProps {
   isFullPage?: boolean;
   onViewAll?: () => void;
 }
 
+interface LedgerItem {
+  id: string;
+  title: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  category: string;
+  timestamp: number;
+  status: 'pending' | 'completed' | 'approved' | 'rejected' | 'won';
+  reference?: string;
+  email?: string;
+  balanceSource?: 'cashback' | 'deposit';
+}
+
 export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
   isFullPage = false,
   onViewAll
 }) => {
-  const { transactions } = useAuth();
+  const { transactions, depositRequests, withdrawalRequests } = useAuth();
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [selectedTx, setSelectedTx] = useState<LedgerItem | null>(null);
 
   const formatTimestamp = (ts: number | string) => {
     const num = Number(ts);
@@ -32,7 +44,76 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
     return String(ts);
   };
 
-  const filteredTransactions = transactions.filter((tx) => {
+  // Combine completed transactions with pending deposit and withdrawal requests
+  const allLedgerItems: LedgerItem[] = [];
+  const txReferences = new Set(transactions.map((t) => t.reference));
+
+  // 1. Add deposit requests (filtering out completed ones if already in transactions list)
+  (depositRequests || []).forEach((dep) => {
+    if (dep.status === 'pending' || !txReferences.has(dep.paymentReference)) {
+      allLedgerItems.push({
+        id: dep.id,
+        title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
+        amount: dep.amount,
+        type: 'credit',
+        category: 'deposit',
+        timestamp: Number(dep.createdAt || Date.now()),
+        status: dep.status === 'approved' ? 'completed' : (dep.status as any),
+        reference: dep.paymentReference || dep.id,
+        email: dep.userEmail,
+        balanceSource: 'deposit'
+      });
+    }
+  });
+
+  // 2. Add withdrawal requests
+  (withdrawalRequests || []).forEach((wd) => {
+    if (wd.status === 'pending' || !txReferences.has(wd.reference)) {
+      allLedgerItems.push({
+        id: wd.id,
+        title: `Withdrawal Request to ${wd.bankName} (${wd.accountNumber ? wd.accountNumber.slice(0, 3) + '***' : ''})`,
+        amount: wd.amount,
+        type: 'debit',
+        category: 'withdrawal',
+        timestamp: Number(wd.createdAt || Date.now()),
+        status: wd.status === 'approved' ? 'completed' : (wd.status as any),
+        reference: wd.reference || wd.id,
+        email: wd.userEmail,
+        balanceSource: wd.balanceSource || 'cashback'
+      });
+    }
+  });
+
+  // 3. Add regular completed transactions
+  (transactions || []).forEach((tx) => {
+    allLedgerItems.push({
+      id: tx.id,
+      title: tx.title,
+      amount: tx.amount,
+      type: tx.type,
+      category: tx.category,
+      timestamp: Number(tx.timestamp),
+      status: (tx.status as string) === 'approved' ? 'completed' : (tx.status as any),
+      reference: tx.reference,
+      email: tx.email,
+      balanceSource: tx.balanceSource
+    });
+  });
+
+  // Deduplicate and sort descending by date
+  const seenIds = new Set<string>();
+  const uniqueItems: LedgerItem[] = [];
+
+  allLedgerItems
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .forEach((item) => {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        uniqueItems.push(item);
+      }
+    });
+
+  const filteredTransactions = uniqueItems.filter((tx) => {
     if (filterType !== 'all' && tx.type !== filterType) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -56,7 +137,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
         <div className="flex items-center gap-2">
           <History className="w-5 h-5 text-[#00B875]" />
           <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-            Recent Transactions &amp; Community Payouts
+            Recent Activity &amp; Approval Ledger
           </h3>
         </div>
 
@@ -71,25 +152,25 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
         )}
       </div>
 
-      {/* PalmPay Community & CBN Regulation Approval Notice Banner */}
+      {/* Regulation Approval Notice Banner */}
       <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/60 via-purple-900/30 to-black/60 border border-purple-500/30 flex items-start gap-3">
         <div className="p-2 rounded-xl bg-purple-600/30 text-[#FFC107] shrink-0 mt-0.5">
           <ShieldAlert className="w-4 h-4" />
         </div>
         <div className="text-xs text-purple-200/90 space-y-0.5">
           <div className="font-bold text-white flex items-center gap-2">
-            <span>PalmPay Community &amp; CBN Regulatory Compliance</span>
+            <span>PalmPay Approval &amp; Settlement System</span>
             <span className="text-[9px] uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/30 font-black">
-              Strictly Regulated
+              ADMIN VERIFIED
             </span>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            All payments, bonuses, deposits, and payouts remain strictly <strong className="text-amber-400">PENDING</strong> until explicitly verified and approved by the PalmPay Community validation network &amp; CBN-regulated interbank settlement committee.
+            All deposit and withdrawal items display real-time <strong className="text-amber-400">PENDING</strong> or <strong className="text-emerald-400">COMPLETED</strong> approval status badges. Balance is updated upon Admin approval.
           </p>
         </div>
       </div>
 
-      {/* Always-visible Search & Filter Bar at the top of TransactionsLedger */}
+      {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-1.5 mirror-glass p-1 rounded-xl border border-purple-500/20 w-fit">
           <button
@@ -140,7 +221,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
       <div className="mirror-glass-card rounded-2xl border border-white/10 divide-y divide-white/5 overflow-hidden shadow-lg">
         {displayList.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs">
-            No transactions found matching your criteria.
+            No items found matching your filter criteria.
           </div>
         ) : (
           displayList.map((tx) => {
@@ -175,32 +256,32 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
                       <span>{formatTimestamp(tx.timestamp)}</span>
                       <span>•</span>
                       <span className="font-mono text-slate-400 uppercase text-[10px]">
-                        {tx.reference || 'COMPLETED'}
+                        {tx.reference || 'REF-N/A'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right side amount & status pill */}
+                {/* Right side amount & explicit status badge */}
                 <div className="text-right shrink-0 space-y-1">
                   <div className={`text-sm sm:text-base font-extrabold font-mono ${amountColor}`}>
                     {amountPrefix}{tx.amount.toLocaleString()}
                   </div>
                   <div>
                     {tx.status === 'pending' ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        <span>Pending Community</span>
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse shadow-sm">
+                        <Clock className="w-3 h-3 text-[#FFC107]" />
+                        <span>Pending Approval</span>
                       </span>
                     ) : tx.status === 'rejected' ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
                         <X className="w-3 h-3 text-rose-400" />
                         <span>Rejected</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 shadow-sm">
                         <CheckCircle2 className="w-3 h-3 text-[#00B875]" />
-                        <span>Approved &amp; Settled</span>
+                        <span>Completed</span>
                       </span>
                     )}
                   </div>
@@ -230,7 +311,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
               </div>
 
               <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-slate-300">
-                PalmPay Community Receipt
+                PalmPay Transaction Receipt
               </span>
 
               <h4 className="text-lg font-bold text-white mt-1">
@@ -246,23 +327,29 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
 
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 text-xs space-y-2">
               <div className="flex justify-between text-slate-400">
-                <span>Community Status:</span>
+                <span>Approval Status:</span>
                 <span className={`font-bold flex items-center gap-1 ${
                   selectedTx.status === 'pending' ? 'text-amber-400' : selectedTx.status === 'rejected' ? 'text-rose-400' : 'text-[#00B875]'
                 }`}>
-                  {selectedTx.status === 'pending' ? <><Clock className="w-3.5 h-3.5" /> Pending Community Approval</> : <><CheckCircle2 className="w-3.5 h-3.5" /> Approved by PalmPay Community</>}
+                  {selectedTx.status === 'pending' ? (
+                    <><Clock className="w-3.5 h-3.5 text-[#FFC107]" /> Pending Admin Approval</>
+                  ) : selectedTx.status === 'rejected' ? (
+                    <><X className="w-3.5 h-3.5 text-rose-400" /> Declined by Admin</>
+                  ) : (
+                    <><CheckCircle2 className="w-3.5 h-3.5 text-[#00B875]" /> Approved &amp; Completed</>
+                  )}
                 </span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Timestamp:</span>
+                <span>Date &amp; Time:</span>
                 <span className="text-slate-200">{formatTimestamp(selectedTx.timestamp)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>Reference:</span>
-                <span className="font-mono text-amber-400 font-bold">{selectedTx.reference || 'PALM-COMMUNITY-PENDING'}</span>
+                <span>Reference ID:</span>
+                <span className="font-mono text-amber-400 font-bold">{selectedTx.reference || 'REF-PENDING'}</span>
               </div>
               <div className="pt-2 border-t border-white/10 text-[11px] text-purple-200/80 leading-relaxed">
-                ℹ️ All payments stay pending until verified and approved by the PalmPay community validators under CBN regulatory oversight.
+                ℹ️ Deposits and withdrawals require Admin approval on the Control Panel before balance updates and disbursements complete.
               </div>
             </div>
 

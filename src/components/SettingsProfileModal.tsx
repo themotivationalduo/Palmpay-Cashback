@@ -261,6 +261,20 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
             </button>
           </div>
 
+          {/* WhatsApp Support Channel */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => window.open('https://whatsapp.com/channel/0029Vb7iKzx9Gv7YcWX4Vv1C', '_blank', 'noopener,noreferrer')}
+              className="w-full py-2.5 px-3.5 rounded-2xl bg-[#02E680]/15 hover:bg-[#02E680]/25 text-[#02E680] font-bold text-xs flex items-center justify-between border border-[#02E680]/35 shadow-sm transition-all active:scale-95"
+            >
+              <span>Contact Us (Official WhatsApp Channel)</span>
+              <span className="text-[10px] uppercase font-black bg-[#02E680] text-black px-2 py-0.5 rounded-md">
+                24/7 Live
+              </span>
+            </button>
+          </div>
+
           {/* Admin Indicator (Only shown if already logged in as Admin) */}
           {isAdmin && (
             <div className="pt-1">

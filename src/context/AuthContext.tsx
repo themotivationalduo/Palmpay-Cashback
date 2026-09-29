@@ -89,6 +89,7 @@ interface AuthContextType {
   }) => Promise<string>;
   approveWithdrawalRequest: (requestId: string) => Promise<void>;
   rejectWithdrawalRequest: (requestId: string, reason?: string) => Promise<void>;
+  withdrawalRequests: WithdrawalRequest[];
 
   transactions: Transaction[];
   notificationsCount: number;
@@ -123,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([
     {
@@ -371,6 +373,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Listen to withdrawal requests
+    const wdQuery = isAdminUser
+      ? collection(db, 'withdrawal_requests')
+      : query(collection(db, 'withdrawal_requests'), where('uid', '==', user.uid));
+
+    const unsubWd = onSnapshot(
+      wdQuery as any,
+      (snapshot: any) => {
+        const list: WithdrawalRequest[] = [];
+        snapshot.forEach((d: any) => {
+          list.push({ id: d.id, ...(d.data() as any) });
+        });
+        list.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+        setWithdrawalRequests(list);
+      },
+      (err) => {
+        console.warn('Withdrawal requests listener note:', err);
+      }
+    );
+
     // Listen to referrals for user
     const refQuery = query(collection(db, 'referrals'), where('referrerUid', '==', user.uid));
     const unsubRef = onSnapshot(
@@ -392,6 +414,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubUser();
       unsubTx();
       unsubDep();
+      unsubWd();
       unsubRef();
     };
   }, [user?.uid, user?.email, user?.role]);
@@ -1694,6 +1717,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         requestWithdrawal,
         approveWithdrawalRequest,
         rejectWithdrawalRequest,
+        withdrawalRequests,
         transactions,
         notificationsCount: notifications.filter(n => n.unread).length,
         notifications,

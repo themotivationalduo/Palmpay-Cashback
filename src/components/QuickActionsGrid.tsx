@@ -66,13 +66,13 @@ export const QuickActionsGrid: React.FC<QuickActionsGridProps> = ({
     },
     {
       id: 'support',
-      title: 'Support',
-      badge: '24/7 Live',
-      badgeColor: 'bg-purple-500/25 text-purple-200 border-purple-500/40',
-      description: 'Connect with a certified customer care representative in real-time.',
+      title: 'Support & Contact',
+      badge: '24/7 WhatsApp',
+      badgeColor: 'bg-[#02E680]/20 text-[#02E680] border-[#02E680]/40 font-bold',
+      description: 'Connect directly with PalmPay Customer Support on WhatsApp Channel.',
       icon: Headphones,
-      iconBg: 'from-[#4A0C72] to-[#7E1DC6] text-white',
-      onClick: () => onSelectAction('support')
+      iconBg: 'from-[#02E680] via-[#00B875] to-[#128C7E] text-black shadow-lg shadow-emerald-500/20',
+      onClick: () => window.open(WA_CHANNEL_LINK, '_blank', 'noopener,noreferrer')
     },
     {
       id: 'game_spin',
