@@ -649,26 +649,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await signInWithPopup(auth, googleProvider);
       const fbUser = res.user;
-      const isMathias = fbUser.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+      const googleEmail = (fbUser.email || '').trim().toLowerCase();
 
-      const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
-      let profile: UserProfile;
+      if (!googleEmail) {
+        throw new Error('Google account did not return an email address.');
+      }
 
-      if (userDoc.exists()) {
-        profile = userDoc.data() as UserProfile;
-        if (isMathias && profile.role !== 'admin') {
-          profile.role = 'admin';
-          await updateDoc(doc(db, 'users', fbUser.uid), { role: 'admin' });
+      const isMathias = googleEmail === ADMIN_CREDENTIALS.email.toLowerCase();
+
+      // Check if an existing account with this email exists in Firestore or local registry
+      let existingProfile: UserProfile | null = null;
+      let existingPasswordHash: string | undefined = undefined;
+
+      // 1. Check local registry by email
+      const registry = getRegisteredUsersMap();
+      if (registry[googleEmail]?.profile) {
+        existingProfile = registry[googleEmail].profile;
+        existingPasswordHash = registry[googleEmail].passwordHash;
+      }
+
+      // 2. Check Firestore by email if not found in local registry
+      if (!existingProfile) {
+        try {
+          const q = query(collection(db, 'users'), where('email', '==', googleEmail));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            existingProfile = querySnap.docs[0].data() as UserProfile;
+          }
+        } catch (e) {
+          console.warn('Firestore email search note:', e);
         }
+      }
+
+      // 3. Check Firestore by fbUser.uid
+      let userDocByUid = null;
+      try {
+        userDocByUid = await getDoc(doc(db, 'users', fbUser.uid));
+      } catch (e) {
+        console.warn('Firestore uid search note:', e);
+      }
+
+      let profileToUse: UserProfile;
+
+      if (existingProfile) {
+        // Connect / Link Google Login to existing email/password account
+        profileToUse = {
+          ...existingProfile,
+          displayName: fbUser.displayName || existingProfile.displayName,
+          photoURL: fbUser.photoURL || existingProfile.photoURL,
+          role: isMathias ? 'admin' : (existingProfile.role || 'user'),
+          hasActiveCode: isMathias ? true : (existingProfile.hasActiveCode || false),
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : existingProfile.activeCashbackCode
+        };
+
+        // Save linked profile
+        try {
+          await setDoc(doc(db, 'users', profileToUse.uid), profileToUse, { merge: true });
+          if (fbUser.uid !== profileToUse.uid) {
+            await setDoc(doc(db, 'users', fbUser.uid), profileToUse, { merge: true });
+          }
+        } catch (e) {
+          console.warn('Firestore linked account update note:', e);
+        }
+      } else if (userDocByUid && userDocByUid.exists()) {
+        const docData = userDocByUid.data() as UserProfile;
+        profileToUse = {
+          ...docData,
+          displayName: fbUser.displayName || docData.displayName,
+          photoURL: fbUser.photoURL || docData.photoURL,
+          role: isMathias ? 'admin' : docData.role
+        };
       } else {
-        profile = {
+        // Create new profile for Google user
+        profileToUse = {
           uid: fbUser.uid,
-          email: fbUser.email || '',
-          displayName: fbUser.displayName || 'PalmPay Member',
+          email: googleEmail,
+          displayName: fbUser.displayName || googleEmail.split('@')[0],
           photoURL: fbUser.photoURL || undefined,
           balance: 0,
           depositBalance: 0,
-          referralCode: generateReferralCode(fbUser.displayName || 'USER'),
+          referralCode: generateReferralCode(fbUser.displayName || googleEmail.split('@')[0]),
           referralCount: 0,
           signupBonusClaimed: false,
           memberSince: 'Sept 2026',
@@ -676,17 +736,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           hasActiveCode: isMathias,
           activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
         };
-        await setDoc(doc(db, 'users', fbUser.uid), profile);
+
+        try {
+          await setDoc(doc(db, 'users', fbUser.uid), profileToUse);
+        } catch (e) {
+          console.warn('Firestore new Google user save note:', e);
+        }
       }
 
-      saveRegisteredUser(profile);
-      sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(profile));
-      setUser(profile);
+      // Persist session
+      saveRegisteredUser(profileToUse, existingPasswordHash);
+      sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(profileToUse));
+      setUser(profileToUse);
+
+      addNotification({
+        title: 'Google Sign-In Successful! 🚀',
+        message: existingProfile
+          ? `Welcome back, ${profileToUse.displayName}! Connected Google login with your existing account.`
+          : `Welcome, ${profileToUse.displayName}! Your PalmPay account is ready.`,
+        type: 'bonus'
+      });
+
     } catch (err: any) {
-      console.warn('Google sign-in popup error, using fallback:', err);
-      const admin = createAdminProfile();
-      setUser(admin);
-      sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(admin));
+      console.error('Google sign-in error:', err);
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') {
+        throw new Error('Google sign-in popup was closed before completing authentication. Please try again.');
+      }
+      throw new Error(err?.message || 'Google sign-in failed. Please verify browser popup permissions or try email/password.');
     } finally {
       setLoading(false);
     }
