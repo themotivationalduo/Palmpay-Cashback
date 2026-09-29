@@ -234,28 +234,28 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
               <div
                 key={tx.id}
                 onClick={() => setSelectedTx(tx)}
-                className="p-3.5 sm:p-4 hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
+                className="p-3 sm:p-4 hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-between gap-2.5 sm:gap-3 group"
               >
                 {/* Left side icon & info */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                   <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 transition-transform group-hover:scale-105 ${tagBg}`}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center border shrink-0 transition-transform group-hover:scale-105 ${tagBg}`}
                   >
                     {isCredit ? (
-                      <ArrowDownLeft className="w-5 h-5 text-[#00B875]" />
+                      <ArrowDownLeft className="w-4 h-4 sm:w-5 sm:h-5 text-[#00B875]" />
                     ) : (
-                      <ArrowUpRight className="w-5 h-5 text-rose-400" />
+                      <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />
                     )}
                   </div>
 
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-[#00B875] transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-[#00B875] transition-colors truncate">
                       {tx.title}
                     </h4>
-                    <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
-                      <span>{formatTimestamp(tx.timestamp)}</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
+                      <span className="shrink-0">{formatTimestamp(tx.timestamp)}</span>
                       <span>•</span>
-                      <span className="font-mono text-slate-400 uppercase text-[10px]">
+                      <span className="font-mono text-slate-400 uppercase text-[9px] sm:text-[10px] truncate">
                         {tx.reference || 'REF-N/A'}
                       </span>
                     </div>
@@ -263,25 +263,26 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
                 </div>
 
                 {/* Right side amount & explicit status badge */}
-                <div className="text-right shrink-0 space-y-1">
-                  <div className={`text-sm sm:text-base font-extrabold font-mono ${amountColor}`}>
+                <div className="text-right shrink-0 space-y-0.5 sm:space-y-1">
+                  <div className={`text-xs sm:text-base font-extrabold font-mono ${amountColor}`}>
                     {amountPrefix}{tx.amount.toLocaleString()}
                   </div>
                   <div>
                     {tx.status === 'pending' ? (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse shadow-sm">
-                        <Clock className="w-3 h-3 text-[#FFC107]" />
-                        <span>Pending Approval</span>
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse shadow-sm">
+                        <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#FFC107]" />
+                        <span className="hidden xs:inline">Pending</span>
+                        <span className="xs:hidden">Wait</span>
                       </span>
                     ) : tx.status === 'rejected' ? (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
-                        <X className="w-3 h-3 text-rose-400" />
-                        <span>Rejected</span>
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                        <X className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-400" />
+                        <span>Declined</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 shadow-sm">
-                        <CheckCircle2 className="w-3 h-3 text-[#00B875]" />
-                        <span>Completed</span>
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 shadow-sm">
+                        <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#00B875]" />
+                        <span>Done</span>
                       </span>
                     )}
                   </div>

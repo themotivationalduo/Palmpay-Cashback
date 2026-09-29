@@ -170,7 +170,7 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
       </div>
 
       {/* Main Glass Game Arena */}
-      <div className="mirror-glass-card rounded-3xl p-6 sm:p-8 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative overflow-hidden">
+      <div className="mirror-glass-card rounded-3xl p-4 sm:p-8 border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.8)] relative overflow-hidden">
         
         {/* Glow backdrop */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#00B875]/10 rounded-full blur-3xl pointer-events-none" />
@@ -194,7 +194,7 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
         </div>
 
         {/* Center Circular Turntable & Spinning Bottle */}
-        <div className="relative w-72 h-72 sm:w-96 sm:h-96 mx-auto my-8 flex items-center justify-center">
+        <div className="relative w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 mx-auto my-6 sm:my-8 flex items-center justify-center">
           
           {/* Dial Board with 8 prize segments */}
           <div className="absolute inset-0 rounded-full mirror-glass border-4 border-white/15 shadow-[inset_0_0_30px_rgba(0,0,0,0.8)] overflow-hidden">
@@ -203,11 +203,11 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
               return (
                 <div
                   key={index}
-                  className="absolute top-0 left-1/2 w-28 -ml-14 h-1/2 origin-bottom flex flex-col items-center pt-2 sm:pt-4"
+                  className="absolute top-0 left-1/2 w-24 -ml-12 sm:w-28 sm:-ml-14 h-1/2 origin-bottom flex flex-col items-center pt-2 sm:pt-4"
                   style={{ transform: `rotate(${rotationDeg}deg)` }}
                 >
                   <span
-                    className="text-[11px] sm:text-xs font-black tracking-tight uppercase px-2 py-0.5 rounded-md shadow-sm border"
+                    className="text-[10px] sm:text-xs font-black tracking-tight uppercase px-1.5 sm:px-2 py-0.5 rounded-md shadow-sm border"
                     style={{
                       backgroundColor: slot.isWin ? `${slot.color}25` : '#EF444420',
                       color: slot.color,
@@ -226,15 +226,15 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
           </div>
 
           {/* Center Hub Indicator Ring */}
-          <div className="absolute w-20 h-20 rounded-full bg-[#120822]/90 border border-purple-500/30 shadow-2xl flex items-center justify-center z-10 pointer-events-none">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-[#621494] via-[#7E1DC6] to-[#A855F7] flex items-center justify-center text-white font-bold text-xs shadow-inner">
+          <div className="absolute w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#120822]/90 border border-purple-500/30 shadow-2xl flex items-center justify-center z-10 pointer-events-none">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[#621494] via-[#7E1DC6] to-[#A855F7] flex items-center justify-center text-white font-bold text-[10px] sm:text-xs shadow-inner">
               PALM
             </div>
           </div>
 
           {/* The Interactive 3D Spinning PalmPay Royal Purple Glass Bottle */}
           <div
-            className="relative z-20 w-16 sm:w-20 h-52 sm:h-64 flex items-center justify-center cursor-pointer will-change-transform"
+            className="relative z-20 w-14 sm:w-16 md:w-20 h-44 sm:h-52 md:h-64 flex items-center justify-center cursor-pointer will-change-transform"
             style={{
               transform: `rotate(${rotation}deg)`,
               transition: spinning ? 'transform 3.5s cubic-bezier(0.15, 0.9, 0.25, 1)' : 'none'

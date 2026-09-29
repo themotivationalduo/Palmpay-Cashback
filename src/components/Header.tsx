@@ -123,7 +123,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                   {/* Live Web Notification Dropdown */}
                   {showNotifications && (
-                    <div className="absolute right-0 mt-3 w-80 sm:w-96 mirror-glass-card rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2 border border-purple-400/30">
+                    <div className="fixed inset-x-2 sm:inset-x-auto sm:right-0 top-14 sm:top-auto sm:mt-3 sm:w-96 max-w-[calc(100vw-1rem)] mirror-glass-card rounded-2xl shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-2 border border-purple-400/30">
                       <div className="flex items-center justify-between pb-3 border-b border-white/10">
                         <div className="flex items-center gap-2">
                           <Bell className="w-4 h-4 text-[#A855F7]" />

@@ -186,28 +186,28 @@ export const BalanceCard: React.FC<BalanceCardProps> = ({
         </button>
 
         {/* Secondary Quick Action Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full sm:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={onAddMoney}
-            className="px-4 py-3 rounded-2xl mirror-glass hover:bg-emerald-950/40 text-emerald-200 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 border border-emerald-500/40 shadow-md"
+            className="w-full px-3 sm:px-4 py-3 rounded-2xl mirror-glass hover:bg-emerald-950/40 text-emerald-200 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 border border-emerald-500/40 shadow-md"
           >
-            <Plus className="w-4 h-4 text-[#00B875]" />
-            <span>Deposit Funds</span>
+            <Plus className="w-4 h-4 text-[#00B875] shrink-0" />
+            <span className="truncate">Deposit Funds</span>
           </button>
 
           <button
             onClick={onBuyCode}
-            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-600 via-[#FFC107] to-yellow-300 text-black hover:opacity-95 text-sm sm:text-base font-black flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/40 shadow-[0_8px_30px_rgba(255,193,7,0.6)] animate-pulse"
+            className="w-full px-3 sm:px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-600 via-[#FFC107] to-yellow-300 text-black hover:opacity-95 text-xs sm:text-sm font-black flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/40 shadow-[0_8px_30px_rgba(255,193,7,0.6)]"
           >
-            <KeyRound className="w-5 h-5 text-black" />
-            <span>Buy CashBack Code (₦8,550)</span>
+            <KeyRound className="w-4 h-4 text-black shrink-0" />
+            <span className="truncate">Buy CashBack Code</span>
           </button>
 
           <button
             onClick={onViewHistory}
-            className="px-4 py-3 rounded-2xl mirror-glass hover:bg-purple-900/30 text-purple-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 border border-purple-400/30 shadow-md"
+            className="w-full px-3 sm:px-4 py-3 rounded-2xl mirror-glass hover:bg-purple-900/30 text-purple-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 border border-purple-400/30 shadow-md"
           >
-            <span>Transaction Ledger</span>
+            <span className="truncate">Transaction Ledger</span>
           </button>
         </div>
 

@@ -53,7 +53,7 @@ const DashboardContent: React.FC<{
   const { isAdmin } = useAuth();
 
   return (
-    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6 sm:space-y-8">
+    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8">
       {/* 1. Main Dashboard View */}
       {currentPage === 'dashboard' && (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">

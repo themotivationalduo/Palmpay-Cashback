@@ -18,13 +18,13 @@ export const UserPersonalizationHeader: React.FC = () => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 pt-2">
       <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-white font-['Poppins',sans-serif] flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold tracking-tight text-white font-['Poppins',sans-serif] flex flex-wrap items-center gap-1.5 sm:gap-2 break-words">
             <span>{getGreeting()},</span>
-            <span className="inline-block animate-wiggle origin-[70%_70%] text-2xl sm:text-3xl" role="img" aria-label="waving hand">
+            <span className="inline-block animate-wiggle origin-[70%_70%] text-xl sm:text-3xl" role="img" aria-label="waving hand">
               👋
             </span>
-            <span className="text-white bg-clip-text">
+            <span className="text-white bg-clip-text break-all sm:break-normal">
               {displayName}
             </span>
           </h1>
