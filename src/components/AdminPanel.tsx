@@ -595,7 +595,7 @@ export const AdminPanel: React.FC = () => {
 
       {/* TAB 0: Deposit Approvals (Receipt Review) */}
       {tab === 'deposits' && (
-        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
           {filteredDeposits.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">
               No deposit requests found for status: <strong>{filterStatus}</strong>.
@@ -740,7 +740,7 @@ export const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
             {filteredWithdrawals.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs">
                 No withdrawal requests found for this filter.
@@ -938,7 +938,7 @@ export const AdminPanel: React.FC = () => {
             <span className="text-xs text-[#FFC107] font-mono font-normal">Pending Orders: {codes.filter(c => c.status === 'pending').length}</span>
           </h3>
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
             {codes.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs">
                 No code purchases recorded.
@@ -1069,7 +1069,7 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               {/* Users list */}
-              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[480px] overflow-y-auto overflow-x-auto w-full min-w-0 max-w-full pr-1 scrollbar-thin">
                 {usersLoading && usersList.length === 0 ? (
                   <div className="p-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
@@ -1693,20 +1693,20 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-black/50 border border-white/10 space-y-3 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-slate-400">User Email:</span>
-                <strong className="text-white font-mono">{selectedReceiptData.userEmail}</strong>
+            <div className="p-3 sm:p-4 rounded-2xl bg-black/50 border border-white/10 space-y-3 text-xs overflow-x-auto scrollbar-thin">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                <span className="text-slate-400 shrink-0">User Email:</span>
+                <strong className="text-white font-mono break-all text-left sm:text-right">{selectedReceiptData.userEmail}</strong>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-slate-400">Amount:</span>
-                <strong className="text-emerald-400 font-mono text-sm">₦{selectedReceiptData.amount.toLocaleString()}</strong>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                <span className="text-slate-400 shrink-0">Amount:</span>
+                <strong className="text-emerald-400 font-mono text-sm text-left sm:text-right">₦{selectedReceiptData.amount.toLocaleString()}</strong>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-slate-400">Status:</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                <span className="text-slate-400 shrink-0">Status:</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase text-left sm:text-right w-fit ${
                   selectedReceiptData.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
                   selectedReceiptData.status === 'rejected' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
                   'bg-amber-500/20 text-[#FFC107] border border-amber-500/30'
@@ -1715,22 +1715,22 @@ export const AdminPanel: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex justify-between items-center py-1 border-b border-white/5">
-                <span className="text-slate-400">Reference:</span>
-                <code className="text-purple-300 font-mono">{selectedReceiptData.reference}</code>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                <span className="text-slate-400 shrink-0">Reference:</span>
+                <code className="text-purple-300 font-mono break-all text-left sm:text-right">{selectedReceiptData.reference}</code>
               </div>
 
               {selectedReceiptData.bankName && (
-                <div className="flex justify-between items-center py-1 border-b border-white/5">
-                  <span className="text-slate-400">Bank Destination:</span>
-                  <strong className="text-white">{selectedReceiptData.bankName} ({selectedReceiptData.accountNumber})</strong>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                  <span className="text-slate-400 shrink-0">Bank Destination:</span>
+                  <strong className="text-white break-words text-left sm:text-right">{selectedReceiptData.bankName} ({selectedReceiptData.accountNumber})</strong>
                 </div>
               )}
 
               {selectedReceiptData.code && (
-                <div className="flex justify-between items-center py-1 border-b border-white/5">
-                  <span className="text-slate-400">CashBack Code:</span>
-                  <code className="text-[#FFC107] font-mono font-bold">{selectedReceiptData.code}</code>
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 sm:py-1 border-b border-white/5 gap-1.5 min-w-0">
+                  <span className="text-slate-400 shrink-0">CashBack Code:</span>
+                  <code className="text-[#FFC107] font-mono font-bold break-all text-left sm:text-right">{selectedReceiptData.code}</code>
                 </div>
               )}
 

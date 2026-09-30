@@ -24,7 +24,8 @@ export default defineConfig(() => {
           theme_color: '#0B0614',
           background_color: '#0B0614',
           display: 'standalone',
-          orientation: 'portrait',
+          display_override: ['window-controls-overlay', 'minimal-ui', 'standalone', 'browser'],
+          orientation: 'any',
           start_url: '/',
           scope: '/',
           icons: [
