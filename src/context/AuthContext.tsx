@@ -1553,7 +1553,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return reqRef;
   };
 
-  // Admin approves withdrawal request -> Disburses to Site B via Server-to-Server API
+  // Admin approves withdrawal request -> Disburses to PalmPay Account via Direct Disbursal API
   const approveWithdrawalRequest = async (requestId: string, force = false): Promise<{ success: boolean; message: string; status?: number }> => {
     try {
       const docRef = doc(db, 'withdrawal_requests', requestId);
@@ -1578,7 +1578,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true, message: `This withdrawal request of ₦${Number(reqData.amount).toLocaleString()} has already been approved and disbursed.` };
       }
 
-      // Step 1: Call Site A backend server endpoint to securely POST to Site B with full amount
+      // Step 1: Call backend server endpoint to securely disburse to PalmPay Account with full amount
       const response = await fetch('/api/admin/withdrawals/approve', {
         method: 'POST',
         headers: {
@@ -1598,7 +1598,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await response.json().catch(() => ({}));
       const statusCode = response.status;
 
-      // Requirement: If Site B responds with status 200 and { success: true }:
+      // If disbursal responds with status 200 and { success: true }:
       if (statusCode === 200 && (result?.success === true || result?.status === 200)) {
         // 1. Update withdrawal status to "successful" in Firestore and local state
         const updatedWd: WithdrawalRequest = {
@@ -1606,7 +1606,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: 'successful',
           processedAt: Date.now(),
           siteBResponse: result.siteBResponse || null,
-          adminNote: 'Disbursed to Site B successfully'
+          adminNote: 'Disbursed to PalmPay Account successfully'
         };
 
         try {
@@ -1614,7 +1614,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             status: 'successful',
             processedAt: Date.now(),
             siteBResponse: result.siteBResponse || null,
-            adminNote: 'Disbursed to Site B successfully'
+            adminNote: 'Disbursed to PalmPay Account successfully'
           });
         } catch (e) {
           console.warn('Firestore updateDoc wd error:', e);
@@ -1634,7 +1634,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTransactions((prev) =>
           prev.map((t) =>
             t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
-              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'Site B'} (${reqData?.accountNumber})` }
+              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
               : t
           )
         );
@@ -1642,7 +1642,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saveLocalTransactions(
           getLocalTransactions().map((t) =>
             t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
-              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'Site B'} (${reqData?.accountNumber})` }
+              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
               : t
           )
         );
@@ -1650,7 +1650,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Notify user of successful withdrawal
         addNotification({
           title: `Withdrawal Approved & Disbursed! 💸`,
-          message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to Site B account (${reqData.accountNumber}) has been approved and disbursed.`,
+          message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to PalmPay account (${reqData.accountNumber}) has been approved and disbursed.`,
           type: 'withdrawal',
           fullDetails: {
             type: 'withdrawal',
@@ -1663,16 +1663,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           success: true,
           status: 200,
-          message: result.message || `Successfully disbursed ₦${reqData.amount.toLocaleString()} to Site B account (${reqData.accountNumber}).`
+          message: result.message || `Successfully disbursed ₦${reqData.amount.toLocaleString()} to PalmPay account (${reqData.accountNumber}).`
         };
       }
 
-      // If Site B responds with 404 ("Account number not found"):
+      // If gateway responds with 404 ("Account number not found"):
       if (statusCode === 404) {
         try {
           await updateDoc(docRef, {
             status: 'failed',
-            adminNote: 'Invalid Site B Account Number',
+            adminNote: 'Invalid PalmPay Account Number',
             processedAt: Date.now(),
             siteBResponse: result.siteBResponse || null
           });
@@ -1681,25 +1681,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setWithdrawalRequests((prev) =>
-          prev.map((r) => (r.id === requestId ? { ...r, status: 'failed', adminNote: 'Invalid Site B Account Number' } : r))
+          prev.map((r) => (r.id === requestId ? { ...r, status: 'failed', adminNote: 'Invalid PalmPay Account Number' } : r))
         );
 
         addNotification({
           title: `Withdrawal Failed: Invalid Account`,
-          message: `Your withdrawal request of ₦${reqData.amount.toLocaleString()} failed: Account number (${reqData.accountNumber}) was not found on Site B.`,
+          message: `Your withdrawal request of ₦${reqData.amount.toLocaleString()} failed: Account number (${reqData.accountNumber}) was not found on PalmPay.`,
           type: 'reject'
         });
 
         return {
           success: false,
           status: 404,
-          message: 'Invalid Site B Account Number: Account number not found on Site B.'
+          message: 'Invalid PalmPay Account Number: Account number not found.'
         };
       }
 
       // Handle all other errors
-      const errorMsg = result?.message || `Site B returned status code ${statusCode}`;
-      console.warn('[Site B Transfer Failed]:', errorMsg);
+      const errorMsg = result?.message || `Disbursal returned status code ${statusCode}`;
+      console.warn('[PalmPay Disbursal Failed]:', errorMsg);
 
       try {
         await updateDoc(docRef, {
@@ -1721,7 +1721,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         success: false,
         status: 500,
-        message: err.message || 'An unexpected error occurred while contacting Site B gateway.'
+        message: err.message || 'An unexpected error occurred while contacting payment gateway.'
       };
     }
   };

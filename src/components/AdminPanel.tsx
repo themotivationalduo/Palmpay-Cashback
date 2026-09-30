@@ -294,22 +294,22 @@ export const AdminPanel: React.FC = () => {
 
         if (result.success) {
           setWithdrawals((prev) =>
-            prev.map((w) => (w.id === id ? { ...w, status: 'successful', adminNote: 'Disbursed to Site B' } : w))
+            prev.map((w) => (w.id === id ? { ...w, status: 'successful', adminNote: 'Disbursed to PalmPay Account' } : w))
           );
           setWithdrawalAlert({
             type: 'success',
-            message: result.message || 'Withdrawal approved & disbursed to Site B successfully!'
+            message: result.message || 'Withdrawal approved & disbursed to PalmPay account successfully!'
           });
           triggerCelebration({
-            title: 'Disbursed to Site B! 💸',
-            subtitle: result.message || 'Payment has been transferred to Site B account successfully.',
+            title: 'Disbursed to PalmPay! 💸',
+            subtitle: result.message || 'Payment has been transferred to PalmPay account successfully.',
             type: 'withdrawal',
             duration: 4000
           });
         } else {
           setWithdrawalAlert({
             type: 'error',
-            message: result.message || 'Disbursal to Site B failed.'
+            message: result.message || 'Disbursal to PalmPay account failed.'
           });
         }
       } else {
@@ -831,7 +831,7 @@ export const AdminPanel: React.FC = () => {
                           type="button"
                           onClick={() => setSelectedReceiptData({
                             type: 'withdrawal',
-                            title: `Site B Withdrawal (${req.bankName || 'Site B'})`,
+                            title: `PalmPay Account Withdrawal (${req.bankName || 'PalmPay Wallet'})`,
                             amount: req.amount,
                             status: req.status,
                             reference: req.reference || req.id,
@@ -859,7 +859,7 @@ export const AdminPanel: React.FC = () => {
                               {isApproving ? (
                                 <>
                                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Calling Site B...</span>
+                                  <span>Calling PalmPay API...</span>
                                 </>
                               ) : (
                                 <>
@@ -884,7 +884,7 @@ export const AdminPanel: React.FC = () => {
                             disabled={isApproving}
                             onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
                             className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                            title="Force re-send disbursal of exact amount to Site B"
+                            title="Force re-send disbursal of exact amount to PalmPay Account"
                           >
                             {isApproving ? (
                               <>
@@ -894,7 +894,7 @@ export const AdminPanel: React.FC = () => {
                             ) : (
                               <>
                                 <RefreshCw className="w-3.5 h-3.5 text-purple-300" />
-                                <span>Re-send to Site B (₦{req.amount.toLocaleString()})</span>
+                                <span>Re-send to PalmPay (₦{req.amount.toLocaleString()})</span>
                               </>
                             )}
                           </button>
@@ -905,7 +905,7 @@ export const AdminPanel: React.FC = () => {
                             disabled={isApproving}
                             onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
                             className="px-3 py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                            title="Retry disbursing exact amount to Site B"
+                            title="Retry disbursing exact amount to PalmPay Account"
                           >
                             {isApproving ? (
                               <>
@@ -1391,7 +1391,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 5: Site B API Gateway Hub */}
+      {/* TAB 5: PalmPay API Gateway Hub */}
       {tab === 'gateway' && (
         <div className="space-y-6 max-w-4xl">
           {/* Header Banner */}
@@ -1403,7 +1403,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-['Poppins',sans-serif]">
-                    <span>Site B Disbursal Gateway</span>
+                    <span>PalmPay Disbursal Gateway</span>
                     <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
                       gatewayConfig?.mode === 'live_remote'
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
@@ -1413,7 +1413,7 @@ export const AdminPanel: React.FC = () => {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-300">
-                    Server-to-server POST endpoint that credits dynamic Site B accounts upon Admin Approval.
+                    Server-to-server POST endpoint that credits dynamic PalmPay accounts upon Admin Approval.
                   </p>
                 </div>
               </div>
@@ -1484,7 +1484,7 @@ export const AdminPanel: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300">
-              Verify Site B API connectivity in real-time. This diagnostic test checks server availability and response headers without transferring or debiting any real user funds.
+              Verify PalmPay API connectivity in real-time. This diagnostic test checks server availability and response headers without transferring or debiting any real user funds.
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1511,7 +1511,7 @@ export const AdminPanel: React.FC = () => {
                   type="text"
                   value={testAccountNumber}
                   onChange={(e) => setTestAccountNumber(e.target.value)}
-                  placeholder="Enter test Site B account number"
+                  placeholder="Enter test PalmPay account number"
                   className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-2.5 border border-white/15 focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -1530,7 +1530,7 @@ export const AdminPanel: React.FC = () => {
                 ) : (
                   <>
                     <Activity className="w-3.5 h-3.5" />
-                    <span>Ping Site B Gateway</span>
+                    <span>Ping PalmPay Gateway</span>
                   </>
                 )}
               </button>
@@ -1571,7 +1571,7 @@ export const AdminPanel: React.FC = () => {
             <div className="flex items-center gap-2 pb-2 border-b border-white/10">
               <Server className="w-4 h-4 text-cyan-400" />
               <h4 className="text-sm font-bold text-white font-['Poppins',sans-serif]">
-                Update Site B Endpoint &amp; Secret (Live Runtime)
+                Update PalmPay Endpoint &amp; Secret (Live Runtime)
               </h4>
             </div>
 
@@ -1593,13 +1593,13 @@ export const AdminPanel: React.FC = () => {
             <form onSubmit={handleSaveGatewayConfig} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Site B API Endpoint URL (process.env.SITE_B_API_URL)
+                  PalmPay API Endpoint URL (process.env.PALMPAY_API_URL or process.env.SITE_B_API_URL)
                 </label>
                 <input
                   type="text"
                   value={gatewayInputUrl}
                   onChange={(e) => setGatewayInputUrl(e.target.value)}
-                  placeholder="e.g. https://site-b-backend.example.com/api/transfers or leave blank for internal test gateway"
+                  placeholder="e.g. https://api.palmpay.com/v1/transfers or leave blank for internal test gateway"
                   className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-cyan-500"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">

@@ -222,7 +222,7 @@ app.get('/api/paystack/resolve', async (req: Request, res: Response) => {
   }
 });
 
-// Dynamic Site B Configuration (fallback to environment variables)
+// Dynamic PalmPay Gateway Configuration (fallback to environment variables)
 let runtimeSiteBConfig: {
   apiUrl: string | null;
   internalSecret: string | null;
@@ -235,7 +235,7 @@ function getTargetSiteBUrl(): string {
   if (runtimeSiteBConfig.apiUrl !== null) {
     return runtimeSiteBConfig.apiUrl.trim();
   }
-  return (process.env.SITE_B_API_URL || '').trim();
+  return (process.env.PALMPAY_API_URL || process.env.SITE_B_API_URL || '').trim();
 }
 
 function getInternalApiSecret(): string {
@@ -253,8 +253,8 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     paystack_configured: Boolean(PAYSTACK_PUBLIC_KEY),
-    site_b_configured: isRealExternal,
-    site_b_url: currentUrl ? currentUrl.replace(/\/\/[^@]+@/, '//***@') : null,
+    gateway_configured: isRealExternal,
+    gateway_url: currentUrl ? currentUrl.replace(/\/\/[^@]+@/, '//***@') : null,
     has_internal_secret: Boolean(getInternalApiSecret()),
     timestamp: new Date().toISOString()
   });
@@ -289,7 +289,7 @@ app.post('/api/admin/gateway-config', (req: Request, res: Response) => {
 
   return res.json({
     success: true,
-    message: 'Site B Gateway Configuration updated successfully.',
+    message: 'PalmPay Gateway Configuration updated successfully.',
     config: {
       apiUrl: currentUrl,
       hasSecret: Boolean(currentSecret),
@@ -298,7 +298,7 @@ app.post('/api/admin/gateway-config', (req: Request, res: Response) => {
   });
 });
 
-// Test / Ping Site B Gateway Endpoint (Connectivity & Health Check ONLY, no live funds transferred)
+// Test / Ping Gateway Endpoint (Connectivity & Health Check ONLY, no live funds transferred)
 app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) => {
   const testAccount = req.body.accountNumber || '8012345678';
   const targetUrl = getTargetSiteBUrl();
@@ -310,9 +310,9 @@ app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) =
     return res.json({
       success: true,
       mode: 'integrated_simulation',
-      message: 'Integrated Site B Test Gateway is ACTIVE and ready to process real disbursements.',
+      message: 'Integrated PalmPay Test Gateway is ACTIVE and ready to process real disbursements.',
       details: {
-        targetUrl: 'internal://mock-site-b-gateway',
+        targetUrl: 'internal://mock-palmpay-gateway',
         testAccount,
         status: 200,
         tip: 'Configure a live external URL anytime in Admin Gateway Settings to route directly to an external server.'
@@ -367,7 +367,7 @@ app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) =
       durationMs: duration,
       targetUrl,
       response: body,
-      message: statusCode === 200 ? `Site B gateway reached successfully (${duration}ms)` : `Site B returned HTTP ${statusCode}`
+      message: statusCode === 200 ? `PalmPay gateway reached successfully (${duration}ms)` : `PalmPay gateway returned HTTP ${statusCode}`
     });
   } catch (err: any) {
     return res.status(502).json({
@@ -375,13 +375,13 @@ app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) =
       status: 502,
       durationMs: Date.now() - startTime,
       targetUrl,
-      message: `Failed to connect to Site B URL: ${err.message || 'Connection refused / DNS lookup failed'}`
+      message: `Failed to connect to PalmPay gateway URL: ${err.message || 'Connection refused / DNS lookup failed'}`
     });
   }
 });
 
-// 3. Mock Site B Endpoint (For local testing & simulation)
-app.post('/api/mock-site-b/transfer', (req: Request, res: Response) => {
+// 3. Mock Endpoint (For local testing & simulation)
+app.post('/api/mock-palmpay/transfer', (req: Request, res: Response) => {
   const secret = req.headers['x-api-secret'] || req.headers['authorization'] || req.headers['x-api-key'];
   const expectedSecret = getInternalApiSecret();
   
@@ -408,7 +408,7 @@ app.post('/api/mock-site-b/transfer', (req: Request, res: Response) => {
   if (accStr === '404' || accStr.includes('notfound') || accStr.includes('invalid')) {
     return res.status(404).json({
       success: false,
-      message: `Account number ${targetAcc} not found on Site B system`
+      message: `PalmPay account number ${targetAcc} not found on system`
     });
   }
 
@@ -417,19 +417,19 @@ app.post('/api/mock-site-b/transfer', (req: Request, res: Response) => {
   // Success 200 simulation
   return res.status(200).json({
     success: true,
-    message: `Successfully credited ₦${numAmt.toLocaleString()} to Site B account ${targetAcc}`,
+    message: `Successfully credited ₦${numAmt.toLocaleString()} to PalmPay account ${targetAcc}`,
     data: {
       accountNumber: targetAcc,
       amount: numAmt,
       senderName: senderName || sender_name || 'PalmPay Cashback',
       transactionReference: transactionReference || reference,
-      siteBTransferId: 'SB-' + Date.now().toString(36).toUpperCase(),
+      transferId: 'PP-' + Date.now().toString(36).toUpperCase(),
       creditedAt: new Date().toISOString()
     }
   });
 });
 
-// 4. Site A Server-to-Server Admin Approval Endpoint -> Disburses exact amount to Site B
+// 4. Server-to-Server Admin Approval Endpoint -> Disburses exact amount to PalmPay Account
 app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) => {
   try {
     const {
@@ -457,7 +457,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
     if (!rawAccount) {
       return res.status(400).json({
         success: false,
-        message: 'Missing dynamic Site B account number'
+        message: 'Missing dynamic PalmPay account number'
       });
     }
 
@@ -470,7 +470,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
       });
     }
 
-    // Determine target Site B URL from runtime config or environment
+    // Determine target PalmPay URL from runtime config or environment
     const targetUrl = getTargetSiteBUrl();
     const internalSecret = getInternalApiSecret();
 
@@ -481,7 +481,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
     const cleanSender = senderName || sender_name || 'PalmPay Cashback';
 
     const payload = {
-      // Universal camelCase + snake_case compatibility for Site B
+      // Universal camelCase + snake_case compatibility
       accountNumber: cleanAcc,
       account_number: cleanAcc,
       account: cleanAcc,
@@ -513,7 +513,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
 
     // If placeholder/local mode without an external live URL, execute through integrated verification logic
     if (isPlaceholder) {
-      console.log(`[Site A -> Site B Transfer] Executing via integrated test gateway for account: ${payload.accountNumber}, Amount: ₦${numAmount.toLocaleString()}`);
+      console.log(`[PalmPay Account Disbursal] Executing via integrated test gateway for account: ${payload.accountNumber}, Amount: ₦${numAmount.toLocaleString()}`);
       
       const accStr = String(payload.accountNumber).toLowerCase();
       // Check 404 simulation cases
@@ -521,10 +521,10 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
         return res.status(404).json({
           success: false,
           status: 404,
-          message: 'Invalid Site B Account Number: Account not found on Site B.',
+          message: 'Invalid PalmPay Account Number: Account not found on PalmPay.',
           siteBResponse: {
             success: false,
-            message: `Account number ${payload.accountNumber} not found on Site B system`
+            message: `PalmPay account number ${payload.accountNumber} not found on system`
           }
         });
       }
@@ -533,7 +533,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
       return res.status(200).json({
         success: true,
         status: 200,
-        message: `Successfully credited ₦${numAmount.toLocaleString()} to Site B account ${payload.accountNumber}`,
+        message: `Successfully credited ₦${numAmount.toLocaleString()} to PalmPay account ${payload.accountNumber}`,
         siteBResponse: {
           success: true,
           data: {
@@ -541,15 +541,15 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
             amount: numAmount,
             senderName: payload.senderName,
             transactionReference: payload.transactionReference,
-            siteBTransferId: 'SB-' + Date.now().toString(36).toUpperCase(),
+            transferId: 'PP-' + Date.now().toString(36).toUpperCase(),
             creditedAt: new Date().toISOString()
           }
         }
       });
     }
 
-    // Live Remote Mode: Send secure server-to-server POST request to external Site B endpoint
-    console.log(`[Site A -> Site B Transfer] Dispatching live server-to-server POST to ${targetUrl}`, {
+    // Live Remote Mode: Send secure server-to-server POST request to external PalmPay endpoint
+    console.log(`[PalmPay Account Disbursal] Dispatching live server-to-server POST to ${targetUrl}`, {
       accountNumber: payload.accountNumber,
       amount: payload.amount,
       senderName: payload.senderName,
@@ -585,7 +585,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
       return res.status(200).json({
         success: true,
         status: 200,
-        message: responseData?.message || `Successfully disbursed ₦${numAmount.toLocaleString()} to Site B account ${cleanAcc}`,
+        message: responseData?.message || `Successfully disbursed ₦${numAmount.toLocaleString()} to PalmPay account ${cleanAcc}`,
         siteBResponse: responseData
       });
     }
@@ -599,7 +599,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
       return res.status(404).json({
         success: false,
         status: 404,
-        message: 'Invalid Site B Account Number: Account not found on Site B.',
+        message: 'Invalid PalmPay Account Number: Account not found on PalmPay.',
         siteBResponse: responseData
       });
     }
@@ -608,16 +608,16 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
     return res.status(statusCode >= 400 && statusCode < 600 ? statusCode : 500).json({
       success: false,
       status: statusCode,
-      message: responseData?.message || responseData?.error || `Site B returned status code ${statusCode}`,
+      message: responseData?.message || responseData?.error || `PalmPay gateway returned status code ${statusCode}`,
       siteBResponse: responseData
     });
 
   } catch (error: any) {
-    console.error('[Site B Connection Error]:', error);
+    console.error('[PalmPay Disbursal Connection Error]:', error);
     return res.status(502).json({
       success: false,
       status: 502,
-      message: `Network error connecting to Site B: ${error.message || 'Connection refused / Gateway Timeout'}.`
+      message: `Network error connecting to PalmPay gateway: ${error.message || 'Connection refused / Gateway Timeout'}.`
     });
   }
 });

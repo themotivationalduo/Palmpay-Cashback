@@ -75,11 +75,11 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     }
   }, [user?.activeCashbackCode]);
 
-  // Initialize destination to Site B / PalmPay
+  // Initialize destination to PalmPay
   useEffect(() => {
     if (isOpen) {
-      setBankName('Site B Wallet');
-      setBankCode('SITE_B');
+      setBankName('PalmPay Wallet');
+      setBankCode('PALMPAY');
       if (user?.displayName && !accountName) {
         setAccountName(user.displayName);
       }
@@ -87,7 +87,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     }
   }, [isOpen, user?.displayName]);
 
-  // Handle dynamic Site B account number input (accepts any Site B account number)
+  // Handle dynamic PalmPay account number input
   const handleAccountNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setAccountNumber(value);
@@ -143,7 +143,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     e.preventDefault();
     const cleanAcc = (accountNumber || '').trim();
     if (!cleanAcc || cleanAcc.length < 2) {
-      setError('Please enter a valid Site B account number.');
+      setError('Please enter a valid PalmPay account number.');
       return;
     }
     const numAmount = Number(amount);
@@ -181,9 +181,9 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
     try {
       const reference = await requestWithdrawal({
-        bankName: bankName || 'Site B Wallet',
+        bankName: bankName || 'PalmPay Wallet',
         accountNumber,
-        userName: accountName.trim() || user?.displayName || 'Site B Beneficiary',
+        userName: accountName.trim() || user?.displayName || 'PalmPay Beneficiary',
         amount: Number(amount),
         cashbackCode: cleanCode,
         balanceSource,
@@ -209,8 +209,8 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   const handleResetAndClose = () => {
     setStep('details');
     setBalanceSource('cashback');
-    setBankName('Site B Wallet');
-    setBankCode('SITE_B');
+    setBankName('PalmPay Wallet');
+    setBankCode('PALMPAY');
     setAccountNumber('');
     setAccountName('');
     setAmount('');
@@ -317,7 +317,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               {/* Destination Platform / Service */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Destination Platform (Site B Disbursal)
+                  Destination Platform (PalmPay Direct Disbursal)
                 </label>
                 <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/40 via-purple-950/60 to-black/60 border border-purple-500/40 flex items-center justify-between shadow-md">
                   <div className="flex items-center gap-3">
@@ -326,28 +326,28 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     </div>
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-white font-['Poppins',sans-serif]">Site B Wallet</span>
+                        <span className="text-sm font-bold text-white font-['Poppins',sans-serif]">PalmPay Wallet</span>
                         <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-md bg-[#00B875]/20 text-[#00B875] border border-[#00B875]/30">
                           Direct Credit
                         </span>
                       </div>
-                      <p className="text-[11px] text-purple-200/80">PalmPay Cashback Server-to-Server Payout</p>
+                      <p className="text-[11px] text-purple-200/80">PalmPay Cashback Instant Payout</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-mono text-[#FFC107] font-bold block">ROUTE: SITE_B</span>
+                    <span className="text-[10px] font-mono text-[#FFC107] font-bold block">ROUTE: PALMPAY</span>
                   </div>
                 </div>
               </div>
 
-              {/* Dynamic Site B Account Number Input */}
+              {/* Dynamic PalmPay Account Number Input */}
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs font-semibold text-slate-300 block">
-                    Site B Account Number
+                    PalmPay Account Number
                   </label>
                   <span className="text-[10px] text-purple-300">
-                    Input any Site B account number
+                    Input PalmPay account or phone number
                   </span>
                 </div>
                 <div className="relative">
@@ -355,13 +355,13 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     type="text"
                     value={accountNumber}
                     onChange={handleAccountNumberChange}
-                    placeholder="Enter any Site B generated account number"
+                    placeholder="Enter PalmPay account number (e.g. 8012345678)"
                     className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
                     required
                   />
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  💡 You can enter your own Site B account number or any beneficiary account on Site B.
+                  💡 Enter your 10-digit PalmPay account number or beneficiary PalmPay recipient ID.
                 </p>
               </div>
 
@@ -374,7 +374,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                   type="text"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. My Site B Account or Beneficiary Name"
+                  placeholder="e.g. My PalmPay Account or Beneficiary Name"
                   className="w-full bg-[#121922] text-white text-xs sm:text-sm rounded-xl px-3.5 py-2.5 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
                 />
               </div>
@@ -654,7 +654,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 <span className="font-bold text-white">{bankName}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Site B Account:</span>
+                <span className="text-slate-400">PalmPay Account:</span>
                 <span className="font-mono text-[#FFC107] font-bold bg-black/50 px-2 py-0.5 rounded border border-amber-500/30">
                   {accountNumber}
                 </span>
