@@ -251,53 +251,53 @@ export const AdminPanel: React.FC = () => {
   const pendingWithdrawalsCount = withdrawals.filter((w) => w.status === 'pending').length;
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 animate-in fade-in">
+    <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in min-w-0 overflow-x-hidden">
       
       {/* Admin Header Banner */}
-      <div className="mirror-glass-card rounded-3xl p-6 sm:p-7 border border-amber-500/30 shadow-2xl relative overflow-hidden">
+      <div className="mirror-glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-7 border border-amber-500/30 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 p-[2px] shadow-lg">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 p-[2px] shadow-lg shrink-0">
               <div className="w-full h-full rounded-2xl bg-[#0A0D0F] flex items-center justify-center">
-                <Shield className="w-6 h-6 text-[#FFC107]" />
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-[#FFC107]" />
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl sm:text-2xl font-black text-white font-['Poppins',sans-serif]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg sm:text-2xl font-black text-white font-['Poppins',sans-serif] truncate">
                   PalmPay Admin Control Center
                 </h2>
-                <span className="text-[10px] font-black uppercase bg-amber-500/20 text-[#FFC107] border border-amber-500/40 px-2 py-0.5 rounded-full">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase bg-amber-500/20 text-[#FFC107] border border-amber-500/40 px-2 py-0.5 rounded-full">
                   SUPER ADMIN
                 </span>
               </div>
-              <p className="text-xs text-purple-200 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-purple-200 mt-0.5 truncate">
                 Admin: <strong className="text-white">Mathias Danlami</strong> • <span className="text-[#FFC107] font-mono">themotivationalduo@gmail.com</span>
               </p>
             </div>
           </div>
 
           {/* Quick Metrics & Purge Action */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="mirror-glass px-3.5 py-2 rounded-xl border border-emerald-500/30 text-center">
-              <span className="text-[10px] text-emerald-300 block uppercase">Pending Deposits</span>
-              <span className="text-base font-bold text-[#00B875] font-mono">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-emerald-500/30 text-center">
+              <span className="text-[9px] sm:text-[10px] text-emerald-300 block uppercase">Pending Deposits</span>
+              <span className="text-sm sm:text-base font-bold text-[#00B875] font-mono">
                 {pendingDepositsCount}
               </span>
             </div>
 
-            <div className="mirror-glass px-3.5 py-2 rounded-xl border border-purple-500/20 text-center">
-              <span className="text-[10px] text-purple-300/80 block uppercase">Pending Payouts</span>
-              <span className="text-base font-bold text-amber-400 font-mono">
+            <div className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-purple-500/20 text-center">
+              <span className="text-[9px] sm:text-[10px] text-purple-300/80 block uppercase">Pending Payouts</span>
+              <span className="text-sm sm:text-base font-bold text-amber-400 font-mono">
                 {pendingWithdrawalsCount}
               </span>
             </div>
 
             <button
               onClick={handlePurgeAll}
-              className="px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/35 border border-red-500/40 text-red-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              className="col-span-2 sm:col-span-1 px-3 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/35 border border-red-500/40 text-red-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
               title="Delete all user accounts and transaction records"
             >
               <Trash2 className="w-4 h-4 text-red-400" />
@@ -308,17 +308,17 @@ export const AdminPanel: React.FC = () => {
 
         {purgeSuccess && (
           <div className="mt-3 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>All accounts and records have been completely purged. Only Admin Mathias Danlami remains active.</span>
           </div>
         )}
       </div>
 
       {/* Admin Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-purple-500/20 pb-2 overflow-x-auto">
+      <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2 flex items-center gap-2 border-b border-purple-500/20">
         <button
           onClick={() => setTab('deposits')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 ${
             tab === 'deposits'
               ? 'bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white shadow-md'
               : 'text-purple-300/70 hover:text-white hover:bg-white/5'
@@ -330,7 +330,7 @@ export const AdminPanel: React.FC = () => {
 
         <button
           onClick={() => setTab('withdrawals')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
             tab === 'withdrawals'
               ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
               : 'text-purple-300/70 hover:text-white hover:bg-white/5'
@@ -342,7 +342,7 @@ export const AdminPanel: React.FC = () => {
 
         <button
           onClick={() => setTab('codes')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
             tab === 'codes'
               ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
               : 'text-purple-300/70 hover:text-white hover:bg-white/5'
@@ -354,7 +354,7 @@ export const AdminPanel: React.FC = () => {
 
         <button
           onClick={() => setTab('balance')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
             tab === 'balance'
               ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-[#7E1DC6] text-white shadow-md ring-2 ring-amber-400/50'
               : 'text-purple-300/70 hover:text-white hover:bg-white/5'
@@ -366,7 +366,7 @@ export const AdminPanel: React.FC = () => {
 
         <button
           onClick={() => setTab('announcements')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
             tab === 'announcements'
               ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
               : 'text-purple-300/70 hover:text-white hover:bg-white/5'
@@ -688,7 +688,7 @@ export const AdminPanel: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between md:justify-end gap-3 flex-wrap">
+                  <div className="flex justify-between items-center md:justify-end gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptData({
@@ -701,14 +701,14 @@ export const AdminPanel: React.FC = () => {
                         code: c.generatedCode,
                         date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
                       })}
-                      className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-[10px] sm:text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
                     >
                       <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
                       <span>View Receipt</span>
                     </button>
 
                     {c.status === 'pending' && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 w-full md:w-auto">
                         <button
                           onClick={async () => {
                             await approveCodeOrder(c.id);
@@ -719,15 +719,15 @@ export const AdminPanel: React.FC = () => {
                               duration: 3500
                             });
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95"
+                          className="flex-1 md:flex-none px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] sm:text-xs shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Approve &amp; Reveal Code</span>
+                          <span>Approve</span>
                         </button>
 
                         <button
                           onClick={() => rejectCodeOrder(c.id, 'Unverified payment')}
-                          className="px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95"
+                          className="flex-1 md:flex-none px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-[10px] sm:text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1 active:scale-95"
                         >
                           <XCircle className="w-3.5 h-3.5" />
                           <span>Decline</span>
@@ -919,7 +919,7 @@ export const AdminPanel: React.FC = () => {
                   <label className="text-xs font-semibold text-slate-300 block mb-1">
                     1. Select Balance Type to Override
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setAdjustBalanceType('cashback')}
@@ -953,7 +953,7 @@ export const AdminPanel: React.FC = () => {
                   <label className="text-xs font-semibold text-slate-300 block mb-1">
                     2. Override Action Mode
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setOverrideMode('set')}
@@ -1148,8 +1148,8 @@ export const AdminPanel: React.FC = () => {
 
       {/* Comprehensive Receipt Details & Proof Modal */}
       {selectedReceiptData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-          <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-6 border border-purple-500/40 shadow-2xl relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-4 sm:p-6 border border-purple-500/40 shadow-2xl relative space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-purple-500/20 text-[#FFC107]">
