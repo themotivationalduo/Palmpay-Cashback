@@ -22,7 +22,12 @@ import {
   Users,
   Sliders,
   ArrowRight,
-  Edit3
+  Edit3,
+  Globe,
+  Server,
+  Activity,
+  Check,
+  Copy
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -46,11 +51,13 @@ export const AdminPanel: React.FC = () => {
   } = useAuth();
   const { triggerCelebration } = useCelebration();
 
-  const [tab, setTab] = useState<'deposits' | 'withdrawals' | 'codes' | 'balance' | 'announcements'>('deposits');
+  const [tab, setTab] = useState<'deposits' | 'withdrawals' | 'codes' | 'balance' | 'announcements' | 'gateway'>('deposits');
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [codes, setCodes] = useState<CodeOrder[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [purgeSuccess, setPurgeSuccess] = useState<boolean>(false);
+  const [approvingWithdrawalId, setApprovingWithdrawalId] = useState<string | null>(null);
+  const [withdrawalAlert, setWithdrawalAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Selected receipt image modal
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -85,6 +92,98 @@ export const AdminPanel: React.FC = () => {
   // Platform announcement broadcast
   const [announcementText, setAnnouncementText] = useState('PalmPayCashBack — Only valid on www.palmpaycashback.vercel.app');
   const [announceMsg, setAnnounceMsg] = useState<string | null>(null);
+
+  // Site B Gateway Integration State
+  const [gatewayConfig, setGatewayConfig] = useState<{
+    apiUrl: string;
+    hasSecret: boolean;
+    maskedSecret: string;
+    mode: string;
+  } | null>(null);
+  const [gatewayLoading, setGatewayLoading] = useState<boolean>(false);
+  const [gatewayInputUrl, setGatewayInputUrl] = useState<string>('');
+  const [gatewayInputSecret, setGatewayInputSecret] = useState<string>('');
+  const [gatewaySaveMsg, setGatewaySaveMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [gatewayPingResult, setGatewayPingResult] = useState<any | null>(null);
+  const [gatewayPinging, setGatewayPinging] = useState<boolean>(false);
+  const [testAccountNumber, setTestAccountNumber] = useState<string>('8012345678');
+  const [copiedAcc, setCopiedAcc] = useState<string | null>(null);
+
+  const fetchGatewayConfig = async () => {
+    try {
+      setGatewayLoading(true);
+      const res = await fetch('/api/admin/gateway-config');
+      const data = await res.json();
+      if (data.success) {
+        setGatewayConfig(data);
+        setGatewayInputUrl(data.apiUrl || '');
+      }
+    } catch (err) {
+      console.warn('Gateway config fetch err:', err);
+    } finally {
+      setGatewayLoading(false);
+    }
+  };
+
+  const handleSaveGatewayConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/gateway-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiUrl: gatewayInputUrl,
+          internalSecret: gatewayInputSecret
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGatewaySaveMsg({ type: 'success', message: 'Site B Gateway settings updated successfully!' });
+        fetchGatewayConfig();
+        setTimeout(() => setGatewaySaveMsg(null), 4000);
+      } else {
+        setGatewaySaveMsg({ type: 'error', message: data.message || 'Failed to update gateway.' });
+      }
+    } catch (err: any) {
+      setGatewaySaveMsg({ type: 'error', message: err.message || 'Failed to save gateway.' });
+    }
+  };
+
+  const handleTestPingGateway = async () => {
+    setGatewayPinging(true);
+    setGatewayPingResult(null);
+    try {
+      const res = await fetch('/api/admin/gateway-config/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountNumber: testAccountNumber
+        })
+      });
+      const data = await res.json();
+      setGatewayPingResult(data);
+    } catch (err: any) {
+      setGatewayPingResult({
+        success: false,
+        status: 502,
+        message: err.message || 'Network error reaching test gateway'
+      });
+    } finally {
+      setGatewayPinging(false);
+    }
+  };
+
+  const handleCopyAccount = (acc: string) => {
+    navigator.clipboard.writeText(acc);
+    setCopiedAcc(acc);
+    setTimeout(() => setCopiedAcc(null), 2000);
+  };
+
+  useEffect(() => {
+    if (tab === 'gateway') {
+      fetchGatewayConfig();
+    }
+  }, [tab]);
 
   const refreshUsersList = async () => {
     setUsersLoading(true);
@@ -154,12 +253,42 @@ export const AdminPanel: React.FC = () => {
   const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
     try {
       if (newStatus === 'approved') {
-        await approveWithdrawalRequest(id);
+        setApprovingWithdrawalId(id);
+        setWithdrawalAlert(null);
+
+        const result = await approveWithdrawalRequest(id);
+        setApprovingWithdrawalId(null);
+
+        if (result.success) {
+          setWithdrawalAlert({
+            type: 'success',
+            message: result.message || 'Withdrawal approved & disbursed to Site B successfully!'
+          });
+          triggerCelebration({
+            title: 'Disbursed to Site B! 💸',
+            subtitle: result.message || 'Payment has been transferred to Site B account successfully.',
+            type: 'withdrawal',
+            duration: 4000
+          });
+        } else {
+          setWithdrawalAlert({
+            type: 'error',
+            message: result.message || 'Disbursal to Site B failed.'
+          });
+        }
       } else {
         await rejectWithdrawalRequest(id, 'Declined by Admin');
+        setWithdrawalAlert({
+          type: 'success',
+          message: 'Withdrawal request declined.'
+        });
       }
-    } catch (err) {
-      console.warn('Update withdrawal Firestore error:', err);
+    } catch (err: any) {
+      setApprovingWithdrawalId(null);
+      setWithdrawalAlert({
+        type: 'error',
+        message: err.message || 'An error occurred updating withdrawal status.'
+      });
     }
   };
 
@@ -375,6 +504,18 @@ export const AdminPanel: React.FC = () => {
           <Bell className="w-4 h-4" />
           <span>Banner Broadcaster</span>
         </button>
+
+        <button
+          onClick={() => setTab('gateway')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
+            tab === 'gateway'
+              ? 'bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white shadow-md ring-1 ring-cyan-400/50'
+              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-cyan-400" />
+          <span>Site B API Gateway</span>
+        </button>
       </div>
 
       {/* Filter Status Selector for Deposits / Withdrawals */}
@@ -535,117 +676,176 @@ export const AdminPanel: React.FC = () => {
 
       {/* TAB 1: Withdrawal Approvals */}
       {tab === 'withdrawals' && (
-        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
-          {filteredWithdrawals.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              No withdrawal requests found for this filter.
-            </div>
-          ) : (
-            filteredWithdrawals.map((req) => (
-              <div key={req.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm sm:text-base text-white">{req.userName}</span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                      req.status === 'approved'
-                        ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
-                        : req.status === 'rejected'
-                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                        : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40'
-                    }`}>
-                      {req.status}
-                    </span>
-                    {req.balanceSource && (
-                      <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
-                        {req.balanceSource === 'deposit' ? 'Deposited Bal' : 'Cashback Bal'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span>Email: <strong className="text-white font-mono">{req.userEmail}</strong></span>
-                    <span>•</span>
-                    <span>Bank: <strong className="text-white">{req.bankName}</strong> ({req.accountNumber})</span>
-                    <span>•</span>
-                    <span>Code: <strong className="text-[#FFC107] font-mono">{req.cashbackCode}</strong></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
-                  <div className="text-right">
-                    <div className="text-lg font-black text-[#FFC107] font-mono">
-                      ₦{req.amount.toLocaleString()}
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      Ref: {req.reference || req.id}
-                    </span>
-                  </div>
-
-                  {req.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedReceiptData({
-                          type: 'withdrawal',
-                          title: `Withdrawal Request (${req.bankName})`,
-                          amount: req.amount,
-                          status: req.status,
-                          reference: req.reference || req.id,
-                          userEmail: req.userEmail,
-                          userName: req.userName,
-                          bankName: req.bankName,
-                          accountNumber: req.accountNumber,
-                          code: req.cashbackCode,
-                          date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
-                        })}
-                        className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
-                        <span>View Receipt</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved')}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Disburse</span>
-                      </button>
-                      <button
-                        onClick={() => handleUpdateWithdrawalStatus(req.id, 'rejected')}
-                        className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Decline</span>
-                      </button>
-                    </div>
-                  )}
-                  {req.status !== 'pending' && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedReceiptData({
-                        type: 'withdrawal',
-                        title: `Withdrawal Request (${req.bankName})`,
-                        amount: req.amount,
-                        status: req.status,
-                        reference: req.reference || req.id,
-                        userEmail: req.userEmail,
-                        userName: req.userName,
-                        bankName: req.bankName,
-                        accountNumber: req.accountNumber,
-                        code: req.cashbackCode,
-                        date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
-                      })}
-                      className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
-                      <span>View Receipt</span>
-                    </button>
-                  )}
-                </div>
+        <div className="space-y-3">
+          {/* Action Response Alert Banner */}
+          {withdrawalAlert && (
+            <div className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 animate-in fade-in ${
+              withdrawalAlert.type === 'success'
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+                : 'bg-rose-500/20 border-rose-500/40 text-rose-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                {withdrawalAlert.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span className="font-semibold">{withdrawalAlert.message}</span>
               </div>
-            ))
+              <button
+                onClick={() => setWithdrawalAlert(null)}
+                className="text-xs hover:text-white p-1 rounded-lg bg-black/20"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
+
+          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/5">
+            {filteredWithdrawals.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                No withdrawal requests found for this filter.
+              </div>
+            ) : (
+              filteredWithdrawals.map((req) => {
+                const isApproving = approvingWithdrawalId === req.id;
+                const isSuccessful = req.status === 'successful' || req.status === 'approved';
+                const isFailed = req.status === 'failed';
+                const isRejected = req.status === 'rejected';
+
+                return (
+                  <div key={req.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-bold text-sm sm:text-base text-white">{req.userName}</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          isSuccessful
+                            ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                            : isFailed || isRejected
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                            : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                        }`}>
+                          {isSuccessful ? 'SUCCESSFUL (SITE B CREDITED)' : isFailed ? 'FAILED (INVALID SITE B ACCOUNT)' : req.status}
+                        </span>
+                        {req.balanceSource && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
+                            {req.balanceSource === 'deposit' ? 'Deposited Bal' : 'Cashback Bal'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>Email: <strong className="text-white font-mono break-all">{req.userEmail}</strong></span>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1">
+                          Site B Account: 
+                          <strong className="text-[#FFC107] font-mono break-all bg-black/40 px-2 py-0.5 rounded border border-amber-500/30">
+                            {req.accountNumber}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAccount(req.accountNumber)}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                            title="Copy Account Number"
+                          >
+                            {copiedAcc === req.accountNumber ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </span>
+                        <span>•</span>
+                        <span>Destination: <strong className="text-white">{req.bankName || 'Site B Wallet'}</strong></span>
+                      </div>
+
+                      {/* Attached Transaction Receipt Proof Indicator */}
+                      {req.receiptImage && (
+                        <div className="pt-1 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(req.receiptImage || null)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-[11px] text-emerald-300 transition-colors"
+                          >
+                            <img src={req.receiptImage} alt="Receipt thumbnail" className="w-4 h-4 rounded object-cover border border-emerald-400/40 shrink-0" />
+                            <span className="font-semibold">View Transaction Receipt</span>
+                            <Eye className="w-3 h-3 text-emerald-400 ml-0.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {req.adminNote && (
+                        <p className="text-[11px] text-rose-300 bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-500/25 mt-1">
+                          ⚠️ {req.adminNote}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className="text-lg font-black text-[#FFC107] font-mono">
+                          ₦{req.amount.toLocaleString()}
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          Ref: {req.reference || req.id}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceiptData({
+                            type: 'withdrawal',
+                            title: `Site B Withdrawal (${req.bankName || 'Site B'})`,
+                            amount: req.amount,
+                            status: req.status,
+                            reference: req.reference || req.id,
+                            userEmail: req.userEmail,
+                            userName: req.userName,
+                            bankName: req.bankName,
+                            accountNumber: req.accountNumber,
+                            code: req.cashbackCode,
+                            receiptImage: req.receiptImage,
+                            date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
+                          })}
+                          className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
+                          <span>Details</span>
+                        </button>
+
+                        {req.status === 'pending' && (
+                          <>
+                            <button
+                              disabled={isApproving}
+                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved')}
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] hover:opacity-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                            >
+                              {isApproving ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Calling Site B...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Approve &amp; Disburse</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              disabled={isApproving}
+                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'rejected')}
+                              className="px-3 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Decline</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 
@@ -1107,6 +1307,246 @@ export const AdminPanel: React.FC = () => {
               Broadcast Globally
             </button>
           </form>
+        </div>
+      )}
+
+      {/* TAB 5: Site B API Gateway Hub */}
+      {tab === 'gateway' && (
+        <div className="space-y-6 max-w-4xl">
+          {/* Header Banner */}
+          <div className="mirror-glass-card rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-cyan-500/30 shadow-2xl relative overflow-hidden space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 font-['Poppins',sans-serif]">
+                    <span>Site B Disbursal Gateway</span>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                      gatewayConfig?.mode === 'live_remote'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                    }`}>
+                      {gatewayConfig?.mode === 'live_remote' ? 'LIVE REMOTE SERVER' : 'INTEGRATED TEST GATEWAY'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    Server-to-server POST endpoint that credits dynamic Site B accounts upon Admin Approval.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={fetchGatewayConfig}
+                disabled={gatewayLoading}
+                className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-cyan-300 text-xs font-semibold border border-cyan-500/30 flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${gatewayLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh Status</span>
+              </button>
+            </div>
+
+            {/* Specification & Architecture Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 space-y-2">
+                <span className="text-slate-400 font-semibold block uppercase text-[10px] tracking-wider">
+                  Target Endpoint &amp; Auth Header
+                </span>
+                <div className="space-y-1 font-mono">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Target URL:</span>
+                    <span className="text-cyan-300 font-bold break-all">
+                      {gatewayConfig?.apiUrl || 'Integrated Mock Gateway'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Header:</span>
+                    <span className="text-amber-300">x-api-secret</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="text-slate-400">Secret Status:</span>
+                    <span className={gatewayConfig?.hasSecret ? 'text-emerald-400 font-bold' : 'text-slate-400'}>
+                      {gatewayConfig?.hasSecret ? gatewayConfig.maskedSecret || 'Configured (Active)' : 'Optional / Default'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 space-y-2">
+                <span className="text-slate-400 font-semibold block uppercase text-[10px] tracking-wider">
+                  Disbursal Payload (JSON)
+                </span>
+                <pre className="text-[11px] font-mono text-purple-200 bg-black/60 p-2.5 rounded-xl border border-white/5 overflow-x-auto leading-tight">
+{`{
+  "accountNumber": withdrawal.accountNumber,
+  "amount": Number(withdrawal.amount),
+  "senderName": "PalmPay Cashback",
+  "transactionReference": withdrawal.id
+}`}
+                </pre>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Test Ping Gateway Tool */}
+          <div className="mirror-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-400" />
+                <h4 className="text-sm font-bold text-white font-['Poppins',sans-serif]">
+                  Interactive Gateway Test &amp; Diagnostics
+                </h4>
+              </div>
+              <span className="text-[10px] text-slate-400">Test 200 Success &amp; 404 Account Not Found</span>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Verify Site B API responses in real-time. Enter any account number or click a test preset below:
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400">Test Presets:</span>
+              <button
+                type="button"
+                onClick={() => setTestAccountNumber('8012345678')}
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold"
+              >
+                8012345678 (200 Success Test)
+              </button>
+              <button
+                type="button"
+                onClick={() => setTestAccountNumber('404')}
+                className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 text-xs font-mono font-bold"
+              >
+                404 (Account Not Found Test)
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="w-full sm:flex-1">
+                <input
+                  type="text"
+                  value={testAccountNumber}
+                  onChange={(e) => setTestAccountNumber(e.target.value)}
+                  placeholder="Enter test Site B account number"
+                  className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-2.5 border border-white/15 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleTestPingGateway}
+                disabled={gatewayPinging || !testAccountNumber.trim()}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 disabled:opacity-50 transition-all active:scale-95"
+              >
+                {gatewayPinging ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Testing Gateway...</span>
+                  </>
+                ) : (
+                  <>
+                    <Activity className="w-3.5 h-3.5" />
+                    <span>Ping Site B Gateway</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Ping Result Box */}
+            {gatewayPingResult && (
+              <div className={`p-4 rounded-2xl border text-xs space-y-2 animate-in fade-in ${
+                gatewayPingResult.success
+                  ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                  : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+              }`}>
+                <div className="flex items-center justify-between font-bold">
+                  <div className="flex items-center gap-2">
+                    {gatewayPingResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    )}
+                    <span>{gatewayPingResult.message || `Status: ${gatewayPingResult.status}`}</span>
+                  </div>
+                  {gatewayPingResult.durationMs && (
+                    <span className="text-[10px] font-mono bg-black/40 px-2 py-0.5 rounded text-cyan-300 border border-white/10">
+                      {gatewayPingResult.durationMs}ms latency
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-black/60 p-3 rounded-xl border border-white/5 font-mono text-[11px] overflow-x-auto text-slate-200">
+                  <pre>{JSON.stringify(gatewayPingResult, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Update Gateway Settings Form */}
+          <div className="mirror-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+              <Server className="w-4 h-4 text-cyan-400" />
+              <h4 className="text-sm font-bold text-white font-['Poppins',sans-serif]">
+                Update Site B Endpoint &amp; Secret (Live Runtime)
+              </h4>
+            </div>
+
+            {gatewaySaveMsg && (
+              <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                gatewaySaveMsg.type === 'success'
+                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+                  : 'bg-rose-500/20 border-rose-500/40 text-rose-200'
+              }`}>
+                {gatewaySaveMsg.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span>{gatewaySaveMsg.message}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveGatewayConfig} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Site B API Endpoint URL (process.env.SITE_B_API_URL)
+                </label>
+                <input
+                  type="text"
+                  value={gatewayInputUrl}
+                  onChange={(e) => setGatewayInputUrl(e.target.value)}
+                  placeholder="e.g. https://site-b-backend.example.com/api/transfers or leave blank for internal test gateway"
+                  className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-cyan-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Leave blank or empty to use the built-in integrated verification test gateway.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">
+                  Internal API Secret Key (process.env.INTERNAL_API_SECRET)
+                </label>
+                <input
+                  type="password"
+                  value={gatewayInputSecret}
+                  onChange={(e) => setGatewayInputSecret(e.target.value)}
+                  placeholder="Enter shared secret passed in x-api-secret header"
+                  className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold text-xs shadow-md hover:opacity-95 transition-all"
+              >
+                Save Gateway Configuration
+              </button>
+            </form>
+          </div>
         </div>
       )}
 

@@ -86,8 +86,9 @@ interface AuthContextType {
     amount: number; 
     cashbackCode: string;
     balanceSource: 'cashback' | 'deposit';
+    receiptImage?: string;
   }) => Promise<string>;
-  approveWithdrawalRequest: (requestId: string) => Promise<void>;
+  approveWithdrawalRequest: (requestId: string) => Promise<{ success: boolean; message: string; status?: number }>;
   rejectWithdrawalRequest: (requestId: string, reason?: string) => Promise<void>;
   withdrawalRequests: WithdrawalRequest[];
 
@@ -1368,6 +1369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     amount: number;
     cashbackCode: string;
     balanceSource: 'cashback' | 'deposit';
+    receiptImage?: string;
   }): Promise<string> => {
     if (!user) throw new Error('User not logged in');
 
@@ -1386,7 +1388,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const reqRef = 'WD-' + Date.now().toString().slice(-6);
 
     try {
-      await addDoc(collection(db, 'withdrawal_requests'), {
+      const newDocRef = doc(collection(db, 'withdrawal_requests'));
+      const reqId = newDocRef.id;
+
+      await setDoc(newDocRef, {
+        id: reqId,
         uid: user.uid,
         userEmail: user.email,
         userName: details.userName,
@@ -1395,6 +1401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         amount: details.amount,
         balanceSource: details.balanceSource,
         cashbackCode: cleanCode,
+        receiptImage: details.receiptImage || null,
         status: 'pending',
         createdAt: Date.now(),
         reference: reqRef
@@ -1408,7 +1415,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           type: 'withdrawal',
           amount: details.amount,
           status: 'pending',
-          reference: reqRef
+          reference: reqRef,
+          receiptImage: details.receiptImage || undefined
         }
       });
     } catch (err) {
@@ -1418,72 +1426,151 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return reqRef;
   };
 
-  // Admin approves withdrawal request -> Debits user's balance and creates completed transaction record
-  const approveWithdrawalRequest = async (requestId: string) => {
+  // Admin approves withdrawal request -> Disburses to Site B via Server-to-Server API
+  const approveWithdrawalRequest = async (requestId: string): Promise<{ success: boolean; message: string; status?: number }> => {
     try {
       const docRef = doc(db, 'withdrawal_requests', requestId);
       const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) throw new Error('Withdrawal request not found.');
-
-      const reqData = docSnap.data() as WithdrawalRequest;
-      if (reqData.status === 'approved') return;
-
-      await updateDoc(docRef, {
-        status: 'approved',
-        processedAt: Date.now()
-      });
-
-      // Deduct balance from target user upon approval
-      const targetUserDoc = await getDoc(doc(db, 'users', reqData.uid));
-      if (targetUserDoc.exists()) {
-        const u = targetUserDoc.data() as UserProfile;
-        const source = reqData.balanceSource || 'cashback';
-
-        if (source === 'deposit') {
-          const newDep = Math.max(0, (u.depositBalance || 0) - reqData.amount);
-          await updateDoc(doc(db, 'users', reqData.uid), { depositBalance: newDep });
-        } else {
-          const newBal = Math.max(0, (u.balance || 0) - reqData.amount);
-          await updateDoc(doc(db, 'users', reqData.uid), { balance: newBal });
-        }
-
-        // Add completed debit transaction
-        await addDoc(collection(db, 'transactions'), {
-          uid: reqData.uid,
-          email: reqData.userEmail,
-          title: `Withdrawal Disbursed (₦${reqData.amount.toLocaleString()}) to ${reqData.bankName}`,
-          amount: reqData.amount,
-          type: 'debit',
-          category: 'withdrawal',
-          balanceSource: reqData.balanceSource || 'cashback',
-          timestamp: Date.now(),
-          status: 'completed',
-          reference: reqData.reference || 'WD-APP-' + Date.now()
-        });
-
-        if (user?.uid === reqData.uid) {
-          setUser((prev) => {
-            if (!prev) return null;
-            return source === 'deposit'
-              ? { ...prev, depositBalance: Math.max(0, (prev.depositBalance || 0) - reqData.amount) }
-              : { ...prev, balance: Math.max(0, prev.balance - reqData.amount) };
-          });
-        }
+      if (!docSnap.exists()) {
+        throw new Error('Withdrawal request not found in database.');
       }
 
-      addNotification({
-        title: `Withdrawal Approved & Disbursed! 💸`,
-        message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to ${reqData.bankName} (${reqData.accountNumber}) has been approved and disbursed.`,
-        type: 'withdrawal',
-        fullDetails: {
-          type: 'withdrawal',
-          amount: reqData.amount,
-          status: 'approved',
-          reference: reqData.reference
-        }
+      const reqData = { id: docSnap.id, ...(docSnap.data() as any) } as WithdrawalRequest;
+      if (reqData.status === 'successful' || reqData.status === 'approved') {
+        return { success: true, message: 'This withdrawal request has already been approved and disbursed.' };
+      }
+
+      // Step 1: Call Site A backend server endpoint to securely POST to Site B
+      const response = await fetch('/api/admin/withdrawals/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          withdrawalId: reqData.id,
+          accountNumber: reqData.accountNumber,
+          amount: Number(reqData.amount),
+          senderName: 'PalmPay Cashback',
+          transactionReference: reqData.id
+        })
       });
-    } catch (err) {
-      console.warn('Approve withdrawal error:', err);
+
+      const result = await response.json().catch(() => ({}));
+      const statusCode = response.status;
+
+      // Requirement 2A: If Site B responds with status 200 and { success: true }:
+      if (statusCode === 200 && (result?.success === true || result?.status === 200)) {
+        // 1. Update withdrawal status on Site A to "successful"
+        await updateDoc(docRef, {
+          status: 'successful',
+          processedAt: Date.now(),
+          siteBResponse: result.siteBResponse || null,
+          adminNote: 'Disbursed to Site B successfully'
+        });
+
+        // 2. Deduct the amount from the Site A user's cashback balance
+        const targetUserDoc = await getDoc(doc(db, 'users', reqData.uid));
+        if (targetUserDoc.exists()) {
+          const u = targetUserDoc.data() as UserProfile;
+          const source = reqData.balanceSource || 'cashback';
+
+          if (source === 'deposit') {
+            const newDep = Math.max(0, (u.depositBalance || 0) - reqData.amount);
+            await updateDoc(doc(db, 'users', reqData.uid), { depositBalance: newDep });
+          } else {
+            const newBal = Math.max(0, (u.balance || 0) - reqData.amount);
+            await updateDoc(doc(db, 'users', reqData.uid), { balance: newBal });
+          }
+
+          // Add completed debit transaction
+          await addDoc(collection(db, 'transactions'), {
+            uid: reqData.uid,
+            email: reqData.userEmail,
+            title: `Withdrawal Disbursed (₦${reqData.amount.toLocaleString()}) to Site B (${reqData.accountNumber})`,
+            amount: reqData.amount,
+            type: 'debit',
+            category: 'withdrawal',
+            balanceSource: source,
+            timestamp: Date.now(),
+            status: 'completed',
+            reference: reqData.reference || reqData.id || 'WD-' + Date.now()
+          });
+
+          if (user?.uid === reqData.uid) {
+            setUser((prev) => {
+              if (!prev) return null;
+              return source === 'deposit'
+                ? { ...prev, depositBalance: Math.max(0, (prev.depositBalance || 0) - reqData.amount) }
+                : { ...prev, balance: Math.max(0, prev.balance - reqData.amount) };
+            });
+          }
+        }
+
+        // Notify user of successful withdrawal
+        addNotification({
+          title: `Withdrawal Successful! 💸`,
+          message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to Site B account (${reqData.accountNumber}) has been approved and disbursed.`,
+          type: 'withdrawal',
+          fullDetails: {
+            type: 'withdrawal',
+            amount: reqData.amount,
+            status: 'successful',
+            reference: reqData.reference || reqData.id
+          }
+        });
+
+        return {
+          success: true,
+          status: 200,
+          message: result.message || `Successfully disbursed ₦${reqData.amount.toLocaleString()} to Site B account (${reqData.accountNumber}).`
+        };
+      }
+
+      // Requirement 2B: If Site B responds with 404 ("Account number not found"):
+      if (statusCode === 404) {
+        // Set to "failed" with message: "Invalid Site B Account Number"
+        await updateDoc(docRef, {
+          status: 'failed',
+          adminNote: 'Invalid Site B Account Number',
+          processedAt: Date.now(),
+          siteBResponse: result.siteBResponse || null
+        });
+
+        addNotification({
+          title: `Withdrawal Failed: Invalid Account`,
+          message: `Your withdrawal request of ₦${reqData.amount.toLocaleString()} failed: Account number (${reqData.accountNumber}) was not found on Site B.`,
+          type: 'reject'
+        });
+
+        return {
+          success: false,
+          status: 404,
+          message: 'Invalid Site B Account Number: Account number not found on Site B.'
+        };
+      }
+
+      // Requirement 2C: Handle all network errors and other non-200 responses gracefully
+      const errorMsg = result?.message || `Site B returned status code ${statusCode}`;
+      console.warn('[Site B Transfer Failed]:', errorMsg);
+
+      await updateDoc(docRef, {
+        adminNote: `Last transfer attempt failed: ${errorMsg}`,
+        siteBResponse: result.siteBResponse || null
+      });
+
+      return {
+        success: false,
+        status: statusCode,
+        message: errorMsg
+      };
+
+    } catch (err: any) {
+      console.error('Approve withdrawal error:', err);
+      return {
+        success: false,
+        status: 500,
+        message: err.message || 'An unexpected error occurred while contacting Site B gateway.'
+      };
     }
   };
 

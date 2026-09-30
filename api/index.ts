@@ -222,13 +222,339 @@ app.get('/api/paystack/resolve', async (req: Request, res: Response) => {
   }
 });
 
+// Dynamic Site B Configuration (fallback to environment variables)
+let runtimeSiteBConfig: {
+  apiUrl: string | null;
+  internalSecret: string | null;
+} = {
+  apiUrl: null,
+  internalSecret: null
+};
+
+function getTargetSiteBUrl(): string {
+  if (runtimeSiteBConfig.apiUrl !== null) {
+    return runtimeSiteBConfig.apiUrl.trim();
+  }
+  return (process.env.SITE_B_API_URL || '').trim();
+}
+
+function getInternalApiSecret(): string {
+  if (runtimeSiteBConfig.internalSecret !== null) {
+    return runtimeSiteBConfig.internalSecret.trim();
+  }
+  return (process.env.INTERNAL_API_SECRET || '').trim();
+}
+
 // Health check endpoint
 app.get('/api/health', (_req: Request, res: Response) => {
+  const currentUrl = getTargetSiteBUrl();
+  const isRealExternal = Boolean(currentUrl && !currentUrl.includes('example.com'));
+
   res.json({
     status: 'ok',
     paystack_configured: Boolean(PAYSTACK_PUBLIC_KEY),
+    site_b_configured: isRealExternal,
+    site_b_url: currentUrl ? currentUrl.replace(/\/\/[^@]+@/, '//***@') : null,
+    has_internal_secret: Boolean(getInternalApiSecret()),
     timestamp: new Date().toISOString()
   });
+});
+
+// Admin Gateway Configuration Endpoints
+app.get('/api/admin/gateway-config', (_req: Request, res: Response) => {
+  const currentUrl = getTargetSiteBUrl();
+  const currentSecret = getInternalApiSecret();
+
+  res.json({
+    success: true,
+    apiUrl: currentUrl,
+    hasSecret: Boolean(currentSecret),
+    maskedSecret: currentSecret ? `${currentSecret.slice(0, 3)}••••••••${currentSecret.slice(-3)}` : '',
+    mode: currentUrl && !currentUrl.includes('example.com') ? 'live_remote' : 'integrated_simulation'
+  });
+});
+
+app.post('/api/admin/gateway-config', (req: Request, res: Response) => {
+  const { apiUrl, internalSecret } = req.body;
+  
+  if (typeof apiUrl === 'string') {
+    runtimeSiteBConfig.apiUrl = apiUrl.trim();
+  }
+  if (typeof internalSecret === 'string') {
+    runtimeSiteBConfig.internalSecret = internalSecret.trim();
+  }
+
+  const currentUrl = getTargetSiteBUrl();
+  const currentSecret = getInternalApiSecret();
+
+  return res.json({
+    success: true,
+    message: 'Site B Gateway Configuration updated successfully.',
+    config: {
+      apiUrl: currentUrl,
+      hasSecret: Boolean(currentSecret),
+      mode: currentUrl && !currentUrl.includes('example.com') ? 'live_remote' : 'integrated_simulation'
+    }
+  });
+});
+
+// Test / Ping Site B Gateway Endpoint
+app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) => {
+  const testAccount = req.body.accountNumber || '8012345678';
+  const targetUrl = getTargetSiteBUrl();
+  const secret = getInternalApiSecret();
+
+  const isPlaceholder = !targetUrl || targetUrl.includes('example.com') || targetUrl === 'mock' || targetUrl === 'integrated';
+
+  if (isPlaceholder) {
+    return res.json({
+      success: true,
+      mode: 'integrated_simulation',
+      message: 'Integrated Site B Test Gateway is ACTIVE and ready to process simulated disbursements.',
+      details: {
+        targetUrl: 'internal://mock-site-b-gateway',
+        testAccount,
+        status: 200,
+        tip: 'Configure a live external URL anytime in Admin Gateway Settings to route directly to an external server.'
+      }
+    });
+  }
+
+  const startTime = Date.now();
+  try {
+    const testPayload = {
+      accountNumber: String(testAccount).trim(),
+      amount: 100,
+      senderName: 'PalmPay Cashback Test Ping',
+      transactionReference: 'PING-' + Date.now().toString(36).toUpperCase()
+    };
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-secret': secret
+      },
+      body: JSON.stringify(testPayload)
+    });
+
+    const duration = Date.now() - startTime;
+    const statusCode = response.status;
+    const rawText = await response.text();
+    let body: any = null;
+    try {
+      body = JSON.parse(rawText);
+    } catch {
+      body = { raw: rawText };
+    }
+
+    return res.json({
+      success: statusCode >= 200 && statusCode < 300,
+      status: statusCode,
+      durationMs: duration,
+      targetUrl,
+      response: body,
+      message: statusCode === 200 ? `Site B gateway reached successfully (${duration}ms)` : `Site B returned HTTP ${statusCode}`
+    });
+  } catch (err: any) {
+    return res.status(502).json({
+      success: false,
+      status: 502,
+      durationMs: Date.now() - startTime,
+      targetUrl,
+      message: `Failed to connect to Site B URL: ${err.message || 'Connection refused / DNS lookup failed'}`
+    });
+  }
+});
+
+// 3. Mock Site B Endpoint (For local testing & simulation)
+app.post('/api/mock-site-b/transfer', (req: Request, res: Response) => {
+  const secret = req.headers['x-api-secret'];
+  const expectedSecret = getInternalApiSecret();
+  
+  if (expectedSecret && secret !== expectedSecret) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Invalid x-api-secret header'
+    });
+  }
+
+  const { accountNumber, amount, senderName, transactionReference } = req.body;
+
+  if (!accountNumber) {
+    return res.status(400).json({
+      success: false,
+      message: 'Account number is required'
+    });
+  }
+
+  // Simulated 404 test cases: if account number is '404' or contains 'notfound' or 'invalid'
+  const accStr = String(accountNumber).trim().toLowerCase();
+  if (accStr === '404' || accStr.includes('notfound') || accStr.includes('invalid')) {
+    return res.status(404).json({
+      success: false,
+      message: `Account number ${accountNumber} not found on Site B system`
+    });
+  }
+
+  // Success 200 simulation
+  return res.status(200).json({
+    success: true,
+    message: `Successfully credited ₦${Number(amount).toLocaleString()} to Site B account ${accountNumber}`,
+    data: {
+      accountNumber,
+      amount,
+      senderName: senderName || 'PalmPay Cashback',
+      transactionReference,
+      siteBTransferId: 'SB-' + Date.now().toString(36).toUpperCase(),
+      creditedAt: new Date().toISOString()
+    }
+  });
+});
+
+// 4. Site A Server-to-Server Admin Approval Endpoint -> Disburses to Site B
+app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) => {
+  try {
+    const { withdrawalId, accountNumber, amount, senderName, transactionReference } = req.body;
+
+    if (!withdrawalId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing withdrawal ID'
+      });
+    }
+
+    if (!accountNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing dynamic Site B account number'
+      });
+    }
+
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid withdrawal amount'
+      });
+    }
+
+    // Determine target Site B URL from runtime config or environment
+    const targetUrl = getTargetSiteBUrl();
+    const internalSecret = getInternalApiSecret();
+
+    const isPlaceholder = !targetUrl || targetUrl.includes('example.com') || targetUrl === 'mock' || targetUrl === 'integrated';
+
+    const payload = {
+      accountNumber: String(accountNumber).trim(),
+      amount: numAmount,
+      senderName: senderName || 'PalmPay Cashback',
+      transactionReference: transactionReference || withdrawalId
+    };
+
+    // If placeholder/local mode without an external live URL, execute through integrated verification logic
+    if (isPlaceholder) {
+      console.log(`[Site A -> Site B Transfer] Executing via integrated test gateway for account: ${payload.accountNumber}`);
+      
+      const accStr = String(payload.accountNumber).toLowerCase();
+      // Check 404 simulation cases
+      if (accStr === '404' || accStr.includes('notfound') || accStr.includes('invalid')) {
+        return res.status(404).json({
+          success: false,
+          status: 404,
+          message: 'Invalid Site B Account Number: Account not found on Site B.',
+          siteBResponse: {
+            success: false,
+            message: `Account number ${payload.accountNumber} not found on Site B system`
+          }
+        });
+      }
+
+      // 200 Success simulation
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        message: `Successfully credited ₦${numAmount.toLocaleString()} to Site B account ${payload.accountNumber}`,
+        siteBResponse: {
+          success: true,
+          data: {
+            accountNumber: payload.accountNumber,
+            amount: numAmount,
+            senderName: payload.senderName,
+            transactionReference: payload.transactionReference,
+            siteBTransferId: 'SB-' + Date.now().toString(36).toUpperCase(),
+            creditedAt: new Date().toISOString()
+          }
+        }
+      });
+    }
+
+    // Live Remote Mode: Send secure server-to-server POST request to external Site B endpoint
+    console.log(`[Site A -> Site B Transfer] Dispatching live server-to-server POST to ${targetUrl}`, {
+      accountNumber: payload.accountNumber,
+      amount: payload.amount,
+      senderName: payload.senderName,
+      ref: payload.transactionReference
+    });
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-secret': internalSecret
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const statusCode = response.status;
+    const rawText = await response.text();
+    let responseData: any = null;
+    try {
+      responseData = JSON.parse(rawText);
+    } catch {
+      responseData = { message: rawText };
+    }
+
+    // 1. Success 200
+    if (statusCode === 200 && (responseData?.success === true || responseData?.status === true || responseData?.success === undefined)) {
+      return res.status(200).json({
+        success: true,
+        status: 200,
+        message: responseData?.message || `Successfully disbursed ₦${numAmount.toLocaleString()} to Site B account ${accountNumber}`,
+        siteBResponse: responseData
+      });
+    }
+
+    // 2. 404 Account Not Found
+    const isAccountNotFound = statusCode === 404 ||
+      (typeof responseData?.message === 'string' && (responseData.message.toLowerCase().includes('not found') || responseData.message.toLowerCase().includes('invalid account'))) ||
+      (typeof responseData?.error === 'string' && (responseData.error.toLowerCase().includes('not found') || responseData.error.toLowerCase().includes('invalid account')));
+
+    if (isAccountNotFound) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: 'Invalid Site B Account Number: Account not found on Site B.',
+        siteBResponse: responseData
+      });
+    }
+
+    // 3. Other HTTP errors
+    return res.status(statusCode >= 400 && statusCode < 600 ? statusCode : 500).json({
+      success: false,
+      status: statusCode,
+      message: responseData?.message || responseData?.error || `Site B returned status code ${statusCode}`,
+      siteBResponse: responseData
+    });
+
+  } catch (error: any) {
+    console.error('[Site B Connection Error]:', error);
+    return res.status(502).json({
+      success: false,
+      status: 502,
+      message: `Network error connecting to Site B: ${error.message || 'Connection refused / Gateway Timeout'}.`
+    });
+  }
 });
 
 export default app;

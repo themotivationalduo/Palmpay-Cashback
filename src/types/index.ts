@@ -44,11 +44,13 @@ export interface WithdrawalRequest {
   amount: number;
   balanceSource?: 'cashback' | 'deposit';
   cashbackCode: string;
-  status: 'pending' | 'approved' | 'rejected';
+  receiptImage?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'successful' | 'failed';
   reference?: string;
   createdAt: number | string;
   processedAt?: number | string;
   adminNote?: string;
+  siteBResponse?: any;
 }
 
 export interface DepositRequest {

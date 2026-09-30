@@ -76,7 +76,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
         type: 'debit',
         category: 'withdrawal',
         timestamp: Number(wd.createdAt || Date.now()),
-        status: wd.status === 'approved' ? 'completed' : (wd.status as any),
+        status: (wd.status === 'approved' || wd.status === 'successful') ? 'completed' : (wd.status === 'failed' || wd.status === 'rejected') ? 'rejected' : (wd.status as any),
         reference: wd.reference || wd.id,
         email: wd.userEmail,
         balanceSource: wd.balanceSource || 'cashback'
