@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <div className="bg-white rounded-2xl px-3 py-1.5 shadow-lg flex items-center gap-2 border border-white/40">
               <img
-                src="/palmpay-logo-png_seeklogo-480404.png"
+                src="/palmpay-logo.svg"
                 alt="Official PalmPay Logo"
                 className="h-8 w-auto object-contain"
               />

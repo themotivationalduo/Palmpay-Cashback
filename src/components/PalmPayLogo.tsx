@@ -13,13 +13,9 @@ export const PalmPayIcon: React.FC<{ className?: string; size?: number }> = ({
 }) => {
   return (
     <img
-      src="/palmpay-icon-exact.png"
+      src="/palmpay-logo.svg"
       alt="PalmPay Icon"
-      className={`${className} object-contain select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(98,20,148,0.5)]`}
-      onError={(e) => {
-        // Fallback to original seeklogo image
-        (e.target as HTMLImageElement).src = '/palmpay-logo-png_seeklogo-480404.png';
-      }}
+      className={`${className} object-contain select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(126,29,198,0.4)]`}
     />
   );
 };
@@ -45,7 +41,7 @@ export const PalmPayLogo: React.FC<PalmPayLogoProps> = ({
       <div className={`flex items-center gap-2 ${className}`}>
         <div className="bg-white rounded-xl p-1.5 shadow-md flex items-center justify-center">
           <img
-            src="/palmpay-logo-png_seeklogo-480404.png"
+            src="/palmpay-logo.svg"
             alt="PalmPay Official Logo"
             className="h-9 sm:h-11 w-auto object-contain"
           />

@@ -30,6 +30,12 @@ export default defineConfig(() => {
           scope: '/',
           icons: [
             {
+              src: '/palmpay-logo.svg',
+              sizes: 'any',
+              type: 'image/svg+xml',
+              purpose: 'any'
+            },
+            {
               src: '/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
@@ -94,8 +100,8 @@ export default defineConfig(() => {
       }
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {}
+      hmr: false,
+      watch: null
     }
   };
 });

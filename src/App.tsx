@@ -22,6 +22,7 @@ import { SettingsProfileModal } from './components/SettingsProfileModal';
 import { AdminPanel } from './components/AdminPanel';
 import { Footer } from './components/Footer';
 import { AuthScreen } from './components/AuthScreen';
+import { SplashScreen } from './components/SplashScreen';
 import { CommunityModal, AddMoneyModal, SupportModal } from './components/Modals/QuickActionModals';
 import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
@@ -186,6 +187,7 @@ const getPageFromPath = (): NavigationPage => {
 
 const MainAppContent: React.FC = () => {
   const { user, loading, activeToast, setActiveToast } = useAuth();
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [currentPage, setCurrentPageState] = useState<NavigationPage>(() => getPageFromPath());
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(() => getPageFromPath() === 'profile');
   const [showWithdrawalModal, setShowWithdrawalModal] = useState<boolean>(false);
@@ -267,7 +269,9 @@ const MainAppContent: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0B0614] text-slate-100 flex flex-col justify-between selection:bg-[#7E1DC6] selection:text-white">
+    <>
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+      <div className="min-h-screen bg-[#0B0614] text-slate-100 flex flex-col justify-between selection:bg-[#7E1DC6] selection:text-white">
       {/* Top Alert Announcement Banner */}
       <TopAlertBanner />
 
@@ -377,6 +381,7 @@ const MainAppContent: React.FC = () => {
       {/* Footer & Compliance Bar with CBN License */}
       <Footer />
     </div>
+    </>
   );
 };
 
