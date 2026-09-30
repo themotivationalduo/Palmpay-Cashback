@@ -1687,7 +1687,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           amount: Number(reqData.amount),
           userEmail: reqData.userEmail,
           userName: reqData.userName,
-          senderName: 'PalmPay Cashback',
+          senderName: 'palmpay Cashback',
+          senderBank: 'palmpay',
           transactionReference: reqData.reference || reqData.id
         })
       });

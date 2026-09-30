@@ -1463,7 +1463,8 @@ export const AdminPanel: React.FC = () => {
 {`{
   "accountNumber": withdrawal.accountNumber,
   "amount": Number(withdrawal.amount),
-  "senderName": "PalmPay Cashback",
+  "senderName": "palmpay Cashback",
+  "senderBank": "palmpay",
   "transactionReference": withdrawal.id
 }`}
                 </pre>

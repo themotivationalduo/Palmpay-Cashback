@@ -417,7 +417,9 @@ app.post('/api/mock-palmpay/transfer', (req: Request, res: Response) => {
     data: {
       accountNumber: targetAcc,
       amount: numAmt,
-      senderName: senderName || sender_name || 'PalmPay Cashback',
+      senderName: senderName || sender_name || 'palmpay Cashback',
+      senderBank: 'palmpay',
+      bankName: 'palmpay',
       transactionReference: transactionReference || reference,
       transferId: 'PP-' + Date.now().toString(36).toUpperCase(),
       creditedAt: new Date().toISOString()
@@ -474,7 +476,7 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
 
     const cleanAcc = String(rawAccount).trim();
     const cleanRef = transactionReference || reference || withdrawalId;
-    const cleanSender = senderName || sender_name || 'PalmPay Cashback';
+    const cleanSender = senderName || sender_name || 'palmpay Cashback';
 
     const payload = {
       // Universal camelCase + snake_case compatibility
@@ -489,6 +491,11 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
       senderName: cleanSender,
       sender_name: cleanSender,
       sender: cleanSender,
+      
+      senderBank: 'palmpay',
+      sender_bank: 'palmpay',
+      bankName: 'palmpay',
+      bank_name: 'palmpay',
       
       transactionReference: cleanRef,
       transaction_reference: cleanRef,
