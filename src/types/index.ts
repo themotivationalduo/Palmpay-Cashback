@@ -32,6 +32,9 @@ export interface Transaction {
   timestamp: number | string;
   status: 'completed' | 'pending' | 'rejected';
   reference?: string;
+  bankName?: string;
+  accountNumber?: string;
+  receiptImage?: string;
 }
 
 export interface WithdrawalRequest {
@@ -44,7 +47,7 @@ export interface WithdrawalRequest {
   amount: number;
   balanceSource?: 'cashback' | 'deposit';
   cashbackCode: string;
-  receiptImage?: string;
+  receiptImage?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'successful' | 'failed';
   reference?: string;
   createdAt: number | string;

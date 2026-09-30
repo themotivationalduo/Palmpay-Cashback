@@ -50,7 +50,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
 
   // 1. Add deposit requests (filtering out completed ones if already in transactions list)
   (depositRequests || []).forEach((dep) => {
-    if (dep.status === 'pending' || !txReferences.has(dep.paymentReference)) {
+    if (!txReferences.has(dep.paymentReference)) {
       allLedgerItems.push({
         id: dep.id,
         title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
@@ -66,9 +66,9 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
     }
   });
 
-  // 2. Add withdrawal requests
+  // 2. Add withdrawal requests (only if not already tracked in transactions)
   (withdrawalRequests || []).forEach((wd) => {
-    if (wd.status === 'pending' || !txReferences.has(wd.reference)) {
+    if (!txReferences.has(wd.reference)) {
       allLedgerItems.push({
         id: wd.id,
         title: `Withdrawal Request to ${wd.bankName} (${wd.accountNumber ? wd.accountNumber.slice(0, 3) + '***' : ''})`,
@@ -84,7 +84,7 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
     }
   });
 
-  // 3. Add regular completed transactions
+  // 3. Add regular transactions
   (transactions || []).forEach((tx) => {
     allLedgerItems.push({
       id: tx.id,
@@ -102,13 +102,16 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
 
   // Deduplicate and sort descending by date
   const seenIds = new Set<string>();
+  const seenRefs = new Set<string>();
   const uniqueItems: LedgerItem[] = [];
 
   allLedgerItems
     .sort((a, b) => b.timestamp - a.timestamp)
     .forEach((item) => {
-      if (!seenIds.has(item.id)) {
+      const refKey = item.reference ? item.reference : null;
+      if (!seenIds.has(item.id) && (!refKey || !seenRefs.has(refKey))) {
         seenIds.add(item.id);
+        if (refKey) seenRefs.add(refKey);
         uniqueItems.push(item);
       }
     });

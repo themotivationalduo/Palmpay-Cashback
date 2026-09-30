@@ -194,8 +194,8 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       setStep('success');
 
       triggerCelebration({
-        title: 'Withdrawal Submitted! ⏳',
-        subtitle: 'Your withdrawal request has been placed on pending status. It will be verified and approved by Admin.',
+        title: 'Withdrawal Pending Admin Approval ⏳',
+        subtitle: 'Your balance has been debited and your withdrawal request is pending admin review and approval.',
         type: 'withdrawal',
         amount: `₦${Number(amount).toLocaleString()}`,
         duration: 4500
@@ -623,14 +623,18 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
             </div>
 
             <div>
-              <span className="text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-[#FFC107] px-3 py-1 rounded-full border border-amber-500/40 animate-pulse">
+              <span className="text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-[#FFC107] px-3.5 py-1 rounded-full border border-amber-500/40 animate-pulse inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
                 STATUS: PENDING ADMIN APPROVAL
               </span>
               <h3 className="text-xl sm:text-2xl font-black text-white mt-2 font-['Poppins',sans-serif]">
-                Withdrawal Submitted!
+                Withdrawal Pending Admin Approval
               </h3>
-              <p className="text-xs text-purple-200/80 mt-1 max-w-sm mx-auto">
-                Your request has been queued in pending status. Balance will be deducted once verified by Admin and disbursed to Site B.
+              <p className="text-xs text-purple-200/90 mt-1.5 max-w-sm mx-auto leading-relaxed">
+                Your withdrawal request of <strong className="text-white">₦{Number(amount).toLocaleString()}</strong> has been submitted. Your balance has been <strong className="text-amber-300">debited</strong> and is currently pending admin review.
+              </p>
+              <p className="text-[11px] text-slate-300/80 mt-1 max-w-sm mx-auto">
+                Funds will disburse to your account once approved by admin, or be reversed back to your balance if declined.
               </p>
             </div>
 
@@ -638,7 +642,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Balance Source:</span>
                 <span className="font-bold text-purple-300">
-                  {balanceSource === 'deposit' ? 'Deposited Balance' : 'CashBack Balance'}
+                  {balanceSource === 'deposit' ? 'Deposited Balance' : 'CashBack Balance'} <span className="text-amber-400 text-[10px] font-normal">(Debited)</span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -656,16 +660,22 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                <span className="text-slate-400 font-semibold">Requested Amount:</span>
+                <span className="text-slate-400 font-semibold">Debited Amount:</span>
                 <span className="text-lg font-black text-[#FFC107] font-mono">
-                  ₦{Number(amount).toLocaleString()}
+                  -₦{Number(amount).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>Record Status:</span>
+                <span className="text-amber-400 font-semibold flex items-center gap-1">
+                  Logged in Transaction History (Pending)
                 </span>
               </div>
               {receiptImage && (
                 <div className="flex items-center justify-between pt-1 text-xs">
                   <span className="text-slate-400">Proof Receipt:</span>
                   <span className="text-emerald-400 flex items-center gap-1 font-semibold">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Attached
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Attached for Admin Review
                   </span>
                 </div>
               )}

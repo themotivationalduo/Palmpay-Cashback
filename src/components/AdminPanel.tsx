@@ -29,7 +29,7 @@ import {
   Check,
   Copy
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, getLocalWithdrawalRequests } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { db, collection, query, onSnapshot, updateDoc, doc, addDoc, getDocs } from '../lib/firebase';
 import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile } from '../types';
@@ -46,13 +46,16 @@ export const AdminPanel: React.FC = () => {
     approveCodeOrder,
     rejectCodeOrder,
     depositRequests,
+    withdrawalRequests,
     overrideUserBalance,
     getAllUsersForAdmin
   } = useAuth();
   const { triggerCelebration } = useCelebration();
 
   const [tab, setTab] = useState<'deposits' | 'withdrawals' | 'codes' | 'balance' | 'announcements' | 'gateway'>('deposits');
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>(() => {
+    return getLocalWithdrawalRequests();
+  });
   const [codes, setCodes] = useState<CodeOrder[]>([]);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [purgeSuccess, setPurgeSuccess] = useState<boolean>(false);
@@ -221,14 +224,40 @@ export const AdminPanel: React.FC = () => {
   };
 
   useEffect(() => {
+    // Helper to merge Firestore snapshots with AuthContext withdrawalRequests and local storage
+    const mergeWithdrawals = (firestoreList?: WithdrawalRequest[]) => {
+      const local = getLocalWithdrawalRequests();
+      const authList = withdrawalRequests || [];
+      const map = new Map<string, WithdrawalRequest>();
+      local.forEach((r) => map.set(r.id, r));
+      authList.forEach((r) => map.set(r.id, r));
+      if (firestoreList) {
+        firestoreList.forEach((r) => map.set(r.id, r));
+      }
+      const list = Array.from(map.values()).sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+      setWithdrawals(list);
+    };
+
+    mergeWithdrawals();
+
+    const handleNewWd = (e: any) => {
+      if (e.detail) {
+        setWithdrawals((prev) => {
+          const filtered = prev.filter((r) => r.id !== e.detail.id);
+          return [e.detail, ...filtered];
+        });
+      }
+    };
+    window.addEventListener('palmpay_withdrawal_created', handleNewWd);
+
     try {
       const unsubWithdrawals = onSnapshot(collection(db, 'withdrawal_requests'), (snapshot) => {
         const list: WithdrawalRequest[] = [];
         snapshot.forEach((d) => list.push({ id: d.id, ...(d.data() as Omit<WithdrawalRequest, 'id'>) }));
-        list.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-        setWithdrawals(list);
+        mergeWithdrawals(list);
       }, (err) => {
         console.warn('Withdrawal snapshot note:', err);
+        mergeWithdrawals();
       });
 
       const unsubCodes = onSnapshot(collection(db, 'code_orders'), (snapshot) => {
@@ -241,14 +270,18 @@ export const AdminPanel: React.FC = () => {
       });
 
       return () => {
+        window.removeEventListener('palmpay_withdrawal_created', handleNewWd);
         unsubWithdrawals();
         unsubCodes();
       };
     } catch {
-      setWithdrawals([]);
+      mergeWithdrawals();
       setCodes([]);
+      return () => {
+        window.removeEventListener('palmpay_withdrawal_created', handleNewWd);
+      };
     }
-  }, []);
+  }, [withdrawalRequests]);
 
   const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
     try {
@@ -260,6 +293,9 @@ export const AdminPanel: React.FC = () => {
         setApprovingWithdrawalId(null);
 
         if (result.success) {
+          setWithdrawals((prev) =>
+            prev.map((w) => (w.id === id ? { ...w, status: 'successful', adminNote: 'Disbursed to Site B' } : w))
+          );
           setWithdrawalAlert({
             type: 'success',
             message: result.message || 'Withdrawal approved & disbursed to Site B successfully!'
@@ -277,10 +313,13 @@ export const AdminPanel: React.FC = () => {
           });
         }
       } else {
-        await rejectWithdrawalRequest(id, 'Declined by Admin');
+        await rejectWithdrawalRequest(id, 'Declined by Admin. Funds reversed.');
+        setWithdrawals((prev) =>
+          prev.map((w) => (w.id === id ? { ...w, status: 'rejected', adminNote: 'Declined by Admin. Funds reversed.' } : w))
+        );
         setWithdrawalAlert({
           type: 'success',
-          message: 'Withdrawal request declined.'
+          message: 'Withdrawal request declined and funds reversed back to user balance.'
         });
       }
     } catch (err: any) {
@@ -801,7 +840,7 @@ export const AdminPanel: React.FC = () => {
                             bankName: req.bankName,
                             accountNumber: req.accountNumber,
                             code: req.cashbackCode,
-                            receiptImage: req.receiptImage,
+                            receiptImage: req.receiptImage || undefined,
                             date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
                           })}
                           className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"

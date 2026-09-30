@@ -120,12 +120,46 @@ export const ADMIN_CREDENTIALS = {
 const REGISTERED_USERS_KEY = 'palmpay_accounts_registry_v3';
 const PURGE_TIMESTAMP_KEY = 'palmpay_db_purged_flag_v3';
 
+export const getLocalWithdrawalRequests = (): WithdrawalRequest[] => {
+  try {
+    const raw = localStorage.getItem('palmpay_withdrawal_requests');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveLocalWithdrawalRequests = (list: WithdrawalRequest[]) => {
+  try {
+    localStorage.setItem('palmpay_withdrawal_requests', JSON.stringify(list));
+  } catch (e) {
+    console.warn('Could not save local withdrawals:', e);
+  }
+};
+
+export const getLocalTransactions = (): Transaction[] => {
+  try {
+    const raw = localStorage.getItem('palmpay_transactions');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveLocalTransactions = (list: Transaction[]) => {
+  try {
+    localStorage.setItem('palmpay_transactions', JSON.stringify(list));
+  } catch (e) {
+    console.warn('Could not save local transactions:', e);
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => getLocalTransactions());
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
-  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>(() => getLocalWithdrawalRequests());
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
   const [notifications, setNotifications] = useState<PlatformNotification[]>([
     {
@@ -339,13 +373,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubTx = onSnapshot(
       txQuery,
       (snapshot) => {
-        const list: Transaction[] = [];
+        const firestoreList: Transaction[] = [];
         snapshot.forEach((d) => {
-          list.push({ id: d.id, ...(d.data() as any) });
+          firestoreList.push({ id: d.id, ...(d.data() as any) });
         });
-        list.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
-        if (list.length > 0) {
-          setTransactions(list);
+
+        // Merge firestore with local
+        const local = getLocalTransactions();
+        const map = new Map<string, Transaction>();
+        local.forEach(t => map.set(t.id, t));
+        firestoreList.forEach(t => map.set(t.id, t));
+
+        const merged = Array.from(map.values())
+          .filter(t => t.uid === user.uid)
+          .sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+
+        if (merged.length > 0) {
+          setTransactions(merged);
+          saveLocalTransactions(merged);
         }
       },
       (err) => {
@@ -382,12 +427,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubWd = onSnapshot(
       wdQuery as any,
       (snapshot: any) => {
-        const list: WithdrawalRequest[] = [];
+        const firestoreList: WithdrawalRequest[] = [];
         snapshot.forEach((d: any) => {
-          list.push({ id: d.id, ...(d.data() as any) });
+          firestoreList.push({ id: d.id, ...(d.data() as any) });
         });
-        list.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-        setWithdrawalRequests(list);
+
+        // Merge firestore with local
+        const local = getLocalWithdrawalRequests();
+        const map = new Map<string, WithdrawalRequest>();
+        local.forEach(r => map.set(r.id, r));
+        firestoreList.forEach(r => map.set(r.id, r));
+
+        const merged = Array.from(map.values())
+          .filter(r => isAdminUser || r.uid === user.uid)
+          .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+
+        setWithdrawalRequests(merged);
+        saveLocalWithdrawalRequests(Array.from(map.values()));
       },
       (err) => {
         console.warn('Withdrawal requests listener note:', err);
@@ -1361,7 +1417,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Request Withdrawal: Creates pending request WITHOUT deducting balance until Admin Approval
+  // Request Withdrawal: Creates pending request, debits balance immediately, logs transaction record
   const requestWithdrawal = async (details: {
     bankName: string;
     accountNumber: string;
@@ -1380,48 +1436,119 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    const availableBal = details.balanceSource === 'deposit' ? (user.depositBalance || 0) : user.balance;
+    const isDeposit = details.balanceSource === 'deposit';
+    const availableBal = isDeposit ? (user.depositBalance || 0) : user.balance;
     if (details.amount > availableBal) {
-      throw new Error(`Requested amount exceeds available ${details.balanceSource === 'deposit' ? 'Deposited' : 'CashBack'} balance.`);
+      throw new Error(`Requested amount exceeds available ${isDeposit ? 'Deposited' : 'CashBack'} balance.`);
     }
 
     const reqRef = 'WD-' + Date.now().toString().slice(-6);
+    const reqId = 'WD-REQ-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const txId = 'tx-wd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+
+    // 1. DEBIT USER'S BALANCE IMMEDIATELY UPON PLACING WITHDRAWAL
+    const newDepBal = isDeposit ? Math.max(0, (user.depositBalance || 0) - details.amount) : (user.depositBalance || 0);
+    const newCashbackBal = !isDeposit ? Math.max(0, user.balance - details.amount) : user.balance;
+
+    const updatedUser: UserProfile = {
+      ...user,
+      balance: newCashbackBal,
+      depositBalance: newDepBal
+    };
+
+    // Update React local state immediately
+    setUser(updatedUser);
+
+    // Update session storage & registered user map
+    try {
+      sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updatedUser));
+      saveRegisteredUser(updatedUser);
+    } catch (e) {
+      console.warn('Storage sync error:', e);
+    }
+
+    // Update user balance in Firestore
+    try {
+      await updateDoc(doc(db, 'users', user.uid), isDeposit ? { depositBalance: newDepBal } : { balance: newCashbackBal });
+    } catch (e) {
+      console.warn('Firestore user debit error:', e);
+    }
+
+    // 2. CREATE TRANSACTION RECORD IN TRANSACTIONS (Visible in user's Transaction Record)
+    const newTx: Transaction = {
+      id: txId,
+      uid: user.uid,
+      email: user.email,
+      title: `Withdrawal Request to ${details.bankName} (${details.accountNumber ? details.accountNumber.slice(0, 3) + '***' : ''})`,
+      amount: details.amount,
+      type: 'debit',
+      category: 'withdrawal',
+      balanceSource: details.balanceSource,
+      timestamp: Date.now(),
+      status: 'pending',
+      reference: reqRef,
+      bankName: details.bankName,
+      accountNumber: details.accountNumber,
+      receiptImage: details.receiptImage || undefined
+    };
+
+    setTransactions((prev) => [newTx, ...prev.filter((t) => t.id !== txId)]);
+    saveLocalTransactions([newTx, ...getLocalTransactions().filter((t) => t.id !== txId)]);
 
     try {
-      const newDocRef = doc(collection(db, 'withdrawal_requests'));
-      const reqId = newDocRef.id;
+      await setDoc(doc(db, 'transactions', txId), newTx);
+    } catch (e) {
+      console.warn('Firestore transaction create error:', e);
+    }
 
-      await setDoc(newDocRef, {
-        id: reqId,
-        uid: user.uid,
-        userEmail: user.email,
-        userName: details.userName,
-        bankName: details.bankName,
-        accountNumber: details.accountNumber,
-        amount: details.amount,
-        balanceSource: details.balanceSource,
-        cashbackCode: cleanCode,
-        receiptImage: details.receiptImage || null,
-        status: 'pending',
-        createdAt: Date.now(),
-        reference: reqRef
-      });
+    // 3. CREATE WITHDRAWAL REQUEST IN WITHDRAWAL_REQUESTS (Visible on Admin Panel)
+    const newReq: WithdrawalRequest = {
+      id: reqId,
+      uid: user.uid,
+      userEmail: user.email,
+      userName: details.userName,
+      bankName: details.bankName,
+      accountNumber: details.accountNumber,
+      amount: details.amount,
+      balanceSource: details.balanceSource,
+      cashbackCode: cleanCode,
+      receiptImage: details.receiptImage || null,
+      status: 'pending',
+      createdAt: Date.now(),
+      reference: reqRef
+    };
 
-      addNotification({
-        title: 'Withdrawal Request Submitted ⏳',
-        message: `Your withdrawal request of ₦${details.amount.toLocaleString()} to ${details.bankName} (${details.accountNumber}) was submitted and placed on PENDING. Balance will update upon Admin approval.`,
-        type: 'system',
-        fullDetails: {
-          type: 'withdrawal',
-          amount: details.amount,
-          status: 'pending',
-          reference: reqRef,
-          receiptImage: details.receiptImage || undefined
-        }
-      });
+    setWithdrawalRequests((prev) => [newReq, ...prev.filter((r) => r.id !== reqId)]);
+    saveLocalWithdrawalRequests([newReq, ...getLocalWithdrawalRequests().filter((r) => r.id !== reqId)]);
+
+    try {
+      await setDoc(doc(db, 'withdrawal_requests', reqId), newReq);
     } catch (err) {
       console.warn('Firestore withdrawal request err:', err);
     }
+
+    // Dispatch global event for instant admin panel detection
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('palmpay_withdrawal_created', { detail: newReq }));
+      } catch (e) {
+        console.warn('Event dispatch note:', e);
+      }
+    }
+
+    // 4. ADD NOTIFICATION INFORMING USER WITHDRAWAL IS PENDING ADMIN APPROVAL
+    addNotification({
+      title: 'Withdrawal Pending Admin Approval ⏳',
+      message: `Your withdrawal request of ₦${details.amount.toLocaleString()} to ${details.bankName} (${details.accountNumber}) has been submitted and debited. It is now pending admin review and approval.`,
+      type: 'system',
+      fullDetails: {
+        type: 'withdrawal',
+        amount: details.amount,
+        status: 'pending',
+        reference: reqRef,
+        receiptImage: details.receiptImage || undefined
+      }
+    });
 
     return reqRef;
   };
@@ -1430,12 +1557,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const approveWithdrawalRequest = async (requestId: string): Promise<{ success: boolean; message: string; status?: number }> => {
     try {
       const docRef = doc(db, 'withdrawal_requests', requestId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
+      let reqData: WithdrawalRequest | undefined = withdrawalRequests.find((r) => r.id === requestId);
+
+      if (!reqData) {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          reqData = { id: docSnap.id, ...(docSnap.data() as any) } as WithdrawalRequest;
+        }
+      }
+
+      if (!reqData) {
+        reqData = getLocalWithdrawalRequests().find((r) => r.id === requestId);
+      }
+
+      if (!reqData) {
         throw new Error('Withdrawal request not found in database.');
       }
 
-      const reqData = { id: docSnap.id, ...(docSnap.data() as any) } as WithdrawalRequest;
       if (reqData.status === 'successful' || reqData.status === 'approved') {
         return { success: true, message: 'This withdrawal request has already been approved and disbursed.' };
       }
@@ -1451,64 +1589,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           accountNumber: reqData.accountNumber,
           amount: Number(reqData.amount),
           senderName: 'PalmPay Cashback',
-          transactionReference: reqData.id
+          transactionReference: reqData.reference || reqData.id
         })
       });
 
       const result = await response.json().catch(() => ({}));
       const statusCode = response.status;
 
-      // Requirement 2A: If Site B responds with status 200 and { success: true }:
+      // Requirement: If Site B responds with status 200 and { success: true }:
       if (statusCode === 200 && (result?.success === true || result?.status === 200)) {
-        // 1. Update withdrawal status on Site A to "successful"
-        await updateDoc(docRef, {
+        // 1. Update withdrawal status to "successful" in Firestore and local state
+        const updatedWd: WithdrawalRequest = {
+          ...reqData,
           status: 'successful',
           processedAt: Date.now(),
           siteBResponse: result.siteBResponse || null,
           adminNote: 'Disbursed to Site B successfully'
-        });
+        };
 
-        // 2. Deduct the amount from the Site A user's cashback balance
-        const targetUserDoc = await getDoc(doc(db, 'users', reqData.uid));
-        if (targetUserDoc.exists()) {
-          const u = targetUserDoc.data() as UserProfile;
-          const source = reqData.balanceSource || 'cashback';
-
-          if (source === 'deposit') {
-            const newDep = Math.max(0, (u.depositBalance || 0) - reqData.amount);
-            await updateDoc(doc(db, 'users', reqData.uid), { depositBalance: newDep });
-          } else {
-            const newBal = Math.max(0, (u.balance || 0) - reqData.amount);
-            await updateDoc(doc(db, 'users', reqData.uid), { balance: newBal });
-          }
-
-          // Add completed debit transaction
-          await addDoc(collection(db, 'transactions'), {
-            uid: reqData.uid,
-            email: reqData.userEmail,
-            title: `Withdrawal Disbursed (₦${reqData.amount.toLocaleString()}) to Site B (${reqData.accountNumber})`,
-            amount: reqData.amount,
-            type: 'debit',
-            category: 'withdrawal',
-            balanceSource: source,
-            timestamp: Date.now(),
-            status: 'completed',
-            reference: reqData.reference || reqData.id || 'WD-' + Date.now()
+        try {
+          await updateDoc(docRef, {
+            status: 'successful',
+            processedAt: Date.now(),
+            siteBResponse: result.siteBResponse || null,
+            adminNote: 'Disbursed to Site B successfully'
           });
-
-          if (user?.uid === reqData.uid) {
-            setUser((prev) => {
-              if (!prev) return null;
-              return source === 'deposit'
-                ? { ...prev, depositBalance: Math.max(0, (prev.depositBalance || 0) - reqData.amount) }
-                : { ...prev, balance: Math.max(0, prev.balance - reqData.amount) };
-            });
-          }
+        } catch (e) {
+          console.warn('Firestore updateDoc wd error:', e);
         }
+
+        setWithdrawalRequests((prev) =>
+          prev.map((r) => (r.id === requestId ? updatedWd : r))
+        );
+        saveLocalWithdrawalRequests(
+          getLocalWithdrawalRequests().map((r) => (r.id === requestId ? updatedWd : r))
+        );
+
+        // 2. Mark the corresponding transaction as "completed" (balance was already debited on placement)
+        const targetRef = reqData.reference;
+        const targetId = reqData.id;
+
+        setTransactions((prev) =>
+          prev.map((t) =>
+            t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
+              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'Site B'} (${reqData?.accountNumber})` }
+              : t
+          )
+        );
+
+        saveLocalTransactions(
+          getLocalTransactions().map((t) =>
+            t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
+              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'Site B'} (${reqData?.accountNumber})` }
+              : t
+          )
+        );
 
         // Notify user of successful withdrawal
         addNotification({
-          title: `Withdrawal Successful! 💸`,
+          title: `Withdrawal Approved & Disbursed! 💸`,
           message: `Your withdrawal of ₦${reqData.amount.toLocaleString()} to Site B account (${reqData.accountNumber}) has been approved and disbursed.`,
           type: 'withdrawal',
           fullDetails: {
@@ -1526,15 +1665,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // Requirement 2B: If Site B responds with 404 ("Account number not found"):
+      // If Site B responds with 404 ("Account number not found"):
       if (statusCode === 404) {
-        // Set to "failed" with message: "Invalid Site B Account Number"
-        await updateDoc(docRef, {
-          status: 'failed',
-          adminNote: 'Invalid Site B Account Number',
-          processedAt: Date.now(),
-          siteBResponse: result.siteBResponse || null
-        });
+        try {
+          await updateDoc(docRef, {
+            status: 'failed',
+            adminNote: 'Invalid Site B Account Number',
+            processedAt: Date.now(),
+            siteBResponse: result.siteBResponse || null
+          });
+        } catch (e) {
+          console.warn('Firestore wd 404 update error:', e);
+        }
+
+        setWithdrawalRequests((prev) =>
+          prev.map((r) => (r.id === requestId ? { ...r, status: 'failed', adminNote: 'Invalid Site B Account Number' } : r))
+        );
 
         addNotification({
           title: `Withdrawal Failed: Invalid Account`,
@@ -1549,14 +1695,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // Requirement 2C: Handle all network errors and other non-200 responses gracefully
+      // Handle all other errors
       const errorMsg = result?.message || `Site B returned status code ${statusCode}`;
       console.warn('[Site B Transfer Failed]:', errorMsg);
 
-      await updateDoc(docRef, {
-        adminNote: `Last transfer attempt failed: ${errorMsg}`,
-        siteBResponse: result.siteBResponse || null
-      });
+      try {
+        await updateDoc(docRef, {
+          adminNote: `Last transfer attempt failed: ${errorMsg}`,
+          siteBResponse: result.siteBResponse || null
+        });
+      } catch (e) {
+        console.warn('Firestore wd note error:', e);
+      }
 
       return {
         success: false,
@@ -1574,25 +1724,155 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Admin rejects withdrawal request
+  // Admin rejects withdrawal request -> ONLY reverse funds when withdrawal is declined by admin
   const rejectWithdrawalRequest = async (requestId: string, reason?: string) => {
     try {
       const docRef = doc(db, 'withdrawal_requests', requestId);
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) return;
+      let reqData: WithdrawalRequest | undefined = withdrawalRequests.find((r) => r.id === requestId);
 
-      const reqData = docSnap.data() as WithdrawalRequest;
+      if (!reqData) {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          reqData = { id: docSnap.id, ...(docSnap.data() as any) };
+        }
+      }
 
-      await updateDoc(docRef, {
-        status: 'rejected',
-        adminNote: reason || 'Declined by Admin.',
-        processedAt: Date.now()
+      if (!reqData) {
+        reqData = getLocalWithdrawalRequests().find((r) => r.id === requestId);
+      }
+
+      if (!reqData) return;
+      if (reqData.status === 'rejected') {
+        // Prevent double reversal
+        return;
+      }
+
+      const isDeposit = reqData.balanceSource === 'deposit';
+      const refundAmount = Number(reqData.amount) || 0;
+
+      // 1. REVERSE FUNDS BACK TO USER'S BALANCE
+      // Update local registered users map
+      const registry = getRegisteredUsersMap();
+      const userKey = (reqData.userEmail || '').trim().toLowerCase();
+      if (registry[userKey]?.profile) {
+        const targetProf = registry[userKey].profile;
+        if (isDeposit) {
+          targetProf.depositBalance = (targetProf.depositBalance || 0) + refundAmount;
+        } else {
+          targetProf.balance = (targetProf.balance || 0) + refundAmount;
+        }
+        saveRegisteredUser(targetProf);
+      }
+
+      // Update Firestore user document
+      try {
+        const uDoc = await getDoc(doc(db, 'users', reqData.uid));
+        if (uDoc.exists()) {
+          const uData = uDoc.data() as UserProfile;
+          if (isDeposit) {
+            const restoredDep = (uData.depositBalance || 0) + refundAmount;
+            await updateDoc(doc(db, 'users', reqData.uid), { depositBalance: restoredDep });
+          } else {
+            const restoredBal = (uData.balance || 0) + refundAmount;
+            await updateDoc(doc(db, 'users', reqData.uid), { balance: restoredBal });
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore reverse funds error:', e);
+      }
+
+      // If current logged-in user is target user, update state & session storage
+      if (user?.uid === reqData.uid) {
+        setUser((prev) => {
+          if (!prev) return null;
+          const updated = isDeposit
+            ? { ...prev, depositBalance: (prev.depositBalance || 0) + refundAmount }
+            : { ...prev, balance: (prev.balance || 0) + refundAmount };
+          sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updated));
+          return updated;
+        });
+      }
+
+      // 2. ADD REVERSAL TRANSACTION RECORD AND MARK PENDING TRANSACTION AS DECLINED
+      const revTxId = 'tx-rev-' + Date.now().toString(36);
+      const revTx: Transaction = {
+        id: revTxId,
+        uid: reqData.uid,
+        email: reqData.userEmail,
+        title: `Withdrawal Reversal (Refunded to ${isDeposit ? 'Deposit' : 'Cashback'})`,
+        amount: refundAmount,
+        type: 'credit',
+        category: 'withdrawal',
+        balanceSource: reqData.balanceSource || 'cashback',
+        timestamp: Date.now(),
+        status: 'completed',
+        reference: 'REV-' + (reqData.reference || reqData.id)
+      };
+
+      const targetRef = reqData.reference;
+      const targetId = reqData.id;
+
+      setTransactions((prev) => {
+        const updated = prev.map((t) =>
+          t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
+            ? { ...t, status: 'rejected' as const, title: `${t.title} [Declined & Reversed]` }
+            : t
+        );
+        return [revTx, ...updated];
       });
 
+      const updatedLocalTx = getLocalTransactions().map((t) =>
+        t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
+          ? { ...t, status: 'rejected' as const, title: `${t.title} [Declined & Reversed]` }
+          : t
+      );
+      saveLocalTransactions([revTx, ...updatedLocalTx]);
+
+      try {
+        await setDoc(doc(db, 'transactions', revTxId), revTx);
+      } catch (e) {
+        console.warn('Firestore reversal tx error:', e);
+      }
+
+      // 3. UPDATE WITHDRAWAL REQUEST STATUS TO REJECTED
+      const updatedReq: WithdrawalRequest = {
+        ...reqData,
+        status: 'rejected',
+        adminNote: reason || 'Declined by Admin. Funds reversed.',
+        processedAt: Date.now()
+      };
+
+      setWithdrawalRequests((prev) =>
+        prev.map((r) => (r.id === requestId ? updatedReq : r))
+      );
+
+      const allLocalWd = getLocalWithdrawalRequests().map((r) =>
+        r.id === requestId ? updatedReq : r
+      );
+      saveLocalWithdrawalRequests(allLocalWd);
+
+      try {
+        await updateDoc(docRef, {
+          status: 'rejected',
+          adminNote: reason || 'Declined by Admin. Funds reversed.',
+          processedAt: Date.now()
+        });
+      } catch (err) {
+        console.warn('Reject withdrawal Firestore error:', err);
+      }
+
+      // 4. NOTIFY USER THAT WITHDRAWAL WAS DECLINED AND FUNDS REVERSED
       addNotification({
-        title: `Withdrawal Request Declined`,
-        message: `Your withdrawal request of ₦${reqData.amount.toLocaleString()} was declined by Admin. ${reason || ''}`,
-        type: 'reject'
+        title: `Withdrawal Declined & Funds Reversed 🔄`,
+        message: `Your withdrawal request of ₦${refundAmount.toLocaleString()} was declined by Admin (${reason || 'Verification unconfirmed'}). ₦${refundAmount.toLocaleString()} has been reversed and credited back to your balance.`,
+        type: 'reject',
+        fullDetails: {
+          type: 'withdrawal',
+          amount: refundAmount,
+          status: 'rejected',
+          adminNote: reason || 'Declined by Admin. Funds reversed.',
+          reference: reqData.reference || reqData.id
+        }
       });
     } catch (err) {
       console.warn('Reject withdrawal error:', err);
