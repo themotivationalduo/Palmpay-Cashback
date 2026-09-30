@@ -360,6 +360,80 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
               </div>
             </div>
 
+            {/* Visual Disbursement Progress Tracker for Withdrawals */}
+            {selectedTx.category === 'withdrawal' && (
+              <div className="p-3 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-left space-y-3">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-white flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-[#FFC107]" />
+                    Disbursement Pipeline
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                    selectedTx.status === 'completed' 
+                      ? 'bg-emerald-500/20 text-[#00B875] border border-emerald-500/30' 
+                      : selectedTx.status === 'rejected'
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                      : 'bg-amber-500/20 text-[#FFC107] border border-amber-500/30'
+                  }`}>
+                    {selectedTx.status === 'completed' ? 'Disbursed' : selectedTx.status === 'rejected' ? 'Declined' : 'In Progress'}
+                  </span>
+                </div>
+
+                <div className="relative px-1 py-1">
+                  <div className="absolute top-3 left-4 right-4 h-1 bg-white/10 rounded-full -translate-y-1/2 z-0" />
+                  <div 
+                    className="absolute top-3 left-4 h-1 bg-gradient-to-r from-emerald-500 via-[#FFC107] to-purple-500 rounded-full -translate-y-1/2 z-0 transition-all duration-500"
+                    style={{
+                      width: selectedTx.status === 'completed' ? '100%' : selectedTx.status === 'rejected' ? '30%' : '50%'
+                    }}
+                  />
+                  <div className="relative z-10 flex justify-between items-center text-center">
+                    <div className="flex flex-col items-center">
+                      <div className="w-6 h-6 rounded-full bg-emerald-500 text-black flex items-center justify-center font-bold text-[10px] border border-white">
+                        ✓
+                      </div>
+                      <span className="text-[9px] font-bold text-emerald-400 mt-1">Processing</span>
+                    </div>
+
+                    <div className="flex flex-col items-center">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] border ${
+                        selectedTx.status === 'rejected'
+                          ? 'bg-rose-500 text-white border-rose-400'
+                          : selectedTx.status === 'completed'
+                          ? 'bg-emerald-500 text-black border-white'
+                          : 'bg-amber-500 text-black border-white animate-pulse'
+                      }`}>
+                        {selectedTx.status === 'rejected' ? '✕' : selectedTx.status === 'completed' ? '✓' : '⚡'}
+                      </div>
+                      <span className="text-[9px] font-bold text-amber-300 mt-1">Verification</span>
+                    </div>
+
+                    <div className="flex flex-col items-center">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] border ${
+                        selectedTx.status === 'completed'
+                          ? 'bg-emerald-500 text-black border-white'
+                          : 'bg-purple-900 text-purple-300 border-purple-500/40'
+                      }`}>
+                        {selectedTx.status === 'completed' ? '✓' : '3'}
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-300 mt-1">Clearance</span>
+                    </div>
+
+                    <div className="flex flex-col items-center">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] border ${
+                        selectedTx.status === 'completed'
+                          ? 'bg-emerald-500 text-black border-white shadow-[0_0_10px_rgba(0,184,117,0.8)]'
+                          : 'bg-slate-800 text-slate-400 border-white/20'
+                      }`}>
+                        {selectedTx.status === 'completed' ? '✓' : '4'}
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-300 mt-1">PalmPay Disbursed</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 text-xs space-y-2">
               <div className="flex justify-between text-slate-400">
                 <span>Approval Status:</span>

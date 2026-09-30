@@ -70,18 +70,23 @@ export const VerificationNotificationModal: React.FC<VerificationNotificationMod
         {/* Step-by-step progress indicator */}
         <div className="my-5 p-3 rounded-2xl bg-black/50 border border-purple-500/20 space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-purple-300/80 font-medium">Verification Status:</span>
-            <span className="text-purple-200 font-bold flex items-center gap-1">
-              <Check className="w-3.5 h-3.5 text-[#FFC107]" /> 100% Cleared
+            <span className="text-purple-300/80 font-medium">Clearance Status:</span>
+            <span className={hasApprovedCode ? 'text-emerald-400 font-bold flex items-center gap-1' : 'text-amber-400 font-bold flex items-center gap-1'}>
+              {hasApprovedCode ? <><Check className="w-3.5 h-3.5 text-[#00B875]" /> Active &amp; Cleared</> : 'Pending Purchase Clearance'}
             </span>
           </div>
 
           <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-            <div className="bg-gradient-to-r from-[#621494] to-[#A855F7] h-full w-full rounded-full" />
+            <div 
+              className="bg-gradient-to-r from-[#621494] to-[#A855F7] h-full rounded-full transition-all duration-500"
+              style={{ width: hasApprovedCode ? '100%' : '35%' }}
+            />
           </div>
 
           <p className="text-[11px] text-purple-200/80 leading-snug">
-            Your CBN automated cash disburser authorization code is ready for final payout authentication.
+            {hasApprovedCode 
+              ? 'Your CBN automated cash disburser authorization code is active and ready for withdrawal clearance.' 
+              : 'Purchase a CashBack Code (₦8,550) to unlock and reveal your clearance code for withdrawals.'}
           </p>
         </div>
 
@@ -92,32 +97,43 @@ export const VerificationNotificationModal: React.FC<VerificationNotificationMod
               <Lock className="w-3.5 h-3.5 text-[#FFC107]" />
               Withdrawal Authentication Code
             </label>
-            <button
-              onClick={() => setRevealCode(!revealCode)}
-              className="text-[11px] text-purple-300 hover:text-white flex items-center gap-1"
-            >
-              {revealCode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-              <span>{revealCode ? 'Hide' : 'Reveal'}</span>
-            </button>
+            {hasApprovedCode && (
+              <button
+                onClick={() => setRevealCode(!revealCode)}
+                className="text-[11px] text-purple-300 hover:text-white flex items-center gap-1"
+              >
+                {revealCode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                <span>{revealCode ? 'Hide' : 'Reveal'}</span>
+              </button>
+            )}
           </div>
 
           <div className="relative">
             <input
               type="text"
               readOnly
-              value={maskedCode}
+              value={hasApprovedCode ? (revealCode ? rawCode : '••••••••••••••••') : 'Locked (Purchase Required)'}
               className="w-full bg-[#150A24] text-white text-sm sm:text-base font-mono font-bold tracking-widest rounded-xl px-4 py-3.5 border border-purple-500/30 focus:outline-none text-center select-all shadow-inner"
             />
           </div>
 
           {/* Copy Code button in PalmPay Purple */}
-          <button
-            onClick={handleCopy}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(126,29,198,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-purple-300/30"
-          >
-            {copied ? <Check className="w-4 h-4 text-[#FFC107]" /> : <Copy className="w-4 h-4" />}
-            <span>{copied ? 'Code Copied to Clipboard!' : 'Copy Code'}</span>
-          </button>
+          {hasApprovedCode ? (
+            <button
+              onClick={handleCopy}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(126,29,198,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-purple-300/30"
+            >
+              {copied ? <Check className="w-4 h-4 text-[#FFC107]" /> : <Copy className="w-4 h-4" />}
+              <span>{copied ? 'Code Copied to Clipboard!' : 'Copy Code'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-slate-300 font-bold text-xs sm:text-sm transition-all"
+            >
+              Close
+            </button>
+          )}
         </div>
 
         {/* Bottom CTA to proceed */}

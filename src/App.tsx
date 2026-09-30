@@ -27,7 +27,7 @@ import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDetailModal } from './components/NotificationDetailModal';
 import { NavigationPage, PlatformNotification } from './types';
-import { Sparkles, ShieldCheck, KeyRound, Award } from 'lucide-react';
+import { Sparkles, ShieldCheck, KeyRound, Award, Lock } from 'lucide-react';
 
 const DashboardContent: React.FC<{
   currentPage: NavigationPage;
@@ -50,7 +50,7 @@ const DashboardContent: React.FC<{
   onOpenCommunity,
   onOpenSupport
 }) => {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   return (
     <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8">
@@ -87,7 +87,7 @@ const DashboardContent: React.FC<{
         </div>
       )}
 
-      {/* 3. CashBack Code Portal */}
+      {/* 3. CashBack Code Portal (Dedicated Exclusively to Code Purchases) */}
       {currentPage === 'code' && (
         <div className="max-w-xl mx-auto space-y-6 py-4 sm:py-8 animate-in fade-in duration-300">
           <div className="mirror-glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl relative text-center space-y-6">
@@ -100,27 +100,56 @@ const DashboardContent: React.FC<{
                 CashBack Code Portal
               </h2>
               <p className="text-xs sm:text-sm text-slate-300">
-                Official PalmPay Clearance &amp; Withdrawal Verification
+                Official PalmPay Clearance Code Purchase &amp; Activation
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between">
-              <span className="text-xs sm:text-sm text-slate-300 font-medium">Standard Clearance Fee:</span>
-              <span className="text-lg sm:text-xl font-extrabold text-[#FFC107] font-mono">₦8,550</span>
-            </div>
+            {user?.hasActiveCode && user?.activeCashbackCode ? (
+              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 text-left space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-[#00B875]" />
+                    Code Active on Account
+                  </span>
+                  <span className="text-[10px] bg-emerald-500/20 text-[#00B875] font-mono px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                    PURCHASED
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-200/90">
+                  You have already purchased and linked a verified CashBack Code to your account. Code purchase is disabled.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between">
+                <span className="text-xs sm:text-sm text-slate-300 font-medium">Clearance Code Price:</span>
+                <span className="text-lg sm:text-xl font-extrabold text-[#FFC107] font-mono">₦8,550</span>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 onClick={onOpenBuyCode}
-                className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-extrabold text-sm shadow-lg hover:opacity-95 active:scale-95 transition-all text-center"
+                disabled={Boolean(user?.hasActiveCode && user?.activeCashbackCode)}
+                className={`flex-1 py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all text-center flex items-center justify-center gap-2 ${
+                  user?.hasActiveCode && user?.activeCashbackCode
+                    ? 'bg-white/10 text-slate-400 border border-white/15 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black hover:opacity-95 active:scale-95'
+                }`}
               >
-                Buy CashBack Code (₦8,550)
+                {user?.hasActiveCode && user?.activeCashbackCode ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    <span>Code Already Purchased</span>
+                  </>
+                ) : (
+                  <span>Purchase CashBack Code (₦8,550)</span>
+                )}
               </button>
               <button
                 onClick={onOpenVerification}
                 className="flex-1 py-3.5 rounded-2xl mirror-glass hover:bg-white/10 text-white font-bold text-sm border border-white/20 transition-all text-center"
               >
-                Check Code Status
+                View Clearance Status
               </button>
             </div>
           </div>

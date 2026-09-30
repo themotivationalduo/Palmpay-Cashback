@@ -5,18 +5,14 @@ import {
   Check, 
   Copy, 
   AlertCircle, 
-  ArrowRight, 
   ExternalLink, 
   CreditCard, 
-  Sparkles, 
   CheckCircle2, 
-  ChevronRight,
-  Wallet,
-  Coins
+  Coins,
+  Lock
 } from 'lucide-react';
-import { useAuth, PAYSTACK_CASHBACK_CODE_URL, OFFICIAL_CASHBACK_CODE } from '../context/AuthContext';
+import { useAuth, PAYSTACK_CASHBACK_CODE_URL } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
-import confetti from 'canvas-confetti';
 
 interface BuyCashbackCodeProps {
   isOpen: boolean;
@@ -42,6 +38,7 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
 
   if (!isOpen) return null;
 
+  const hasPurchasedCode = Boolean(user?.hasActiveCode && user?.activeCashbackCode);
   const activeCode = user?.activeCashbackCode || '';
   const depositBal = user?.depositBalance ?? 0;
 
@@ -60,11 +57,17 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
   };
 
   const handleOpenPaystack = () => {
+    if (hasPurchasedCode) return;
     window.open(PAYSTACK_CASHBACK_CODE_URL, '_blank', 'noopener,noreferrer');
   };
 
   // Buy directly using Deposited Balance
   const handleBuyWithDepositBalance = async () => {
+    if (hasPurchasedCode) {
+      setError('You have already purchased and activated a CashBack Code. No duplicate purchase is permitted.');
+      return;
+    }
+
     if (depositBal < 8550) {
       setError(`Insufficient deposited balance (Available: ₦${depositBal.toLocaleString()}). You need ₦8,550 in your deposited balance, or pay directly via Paystack.`);
       return;
@@ -97,6 +100,11 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
   // Manual activate code
   const handleActivateCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasPurchasedCode) {
+      setError('You already have an active CashBack Code linked to this account.');
+      return;
+    }
+
     const clean = inputCode.trim();
     if (!clean || clean.length < 5) {
       setError('Please enter a valid CashBack Code.');
@@ -108,11 +116,11 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
 
     try {
       await activateCashbackCode(clean);
-      setSuccessMessage('CashBack Code successfully activated and linked to your account!');
+      setSuccessMessage('CashBack Code successfully submitted and linked to your account!');
       
       triggerCelebration({
         title: 'CashBack Code Linked! 🛡️',
-        subtitle: `Code "${clean}" successfully verified and active on your account.`,
+        subtitle: `Code successfully submitted for approval on your account.`,
         type: 'code',
         duration: 4200
       });
@@ -143,13 +151,13 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins',sans-serif]">
-                  Buy CashBack Code
+                  Purchase CashBack Code
                 </h3>
                 <span className="text-[10px] font-black uppercase bg-[#00B875]/20 text-[#00B875] px-2 py-0.5 rounded-full border border-[#00B875]/30">
-                  CBN VERIFIED
+                  OFFICIAL CLEARANCE
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Official Withdrawal Clearance Protocol</p>
+              <p className="text-xs text-slate-400">Solely for CashBack Code purchase & activation</p>
             </div>
           </div>
 
@@ -176,40 +184,24 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
           </div>
         )}
 
-        {/* Pricing Banner */}
-        <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-black/40 border border-amber-500/30 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider block">
-              Clearance Fee
-            </span>
-            <span className="text-2xl sm:text-3xl font-extrabold text-[#FFC107] font-mono">
-              ₦8,550
-            </span>
-            <span className="text-[11px] text-slate-300 block mt-0.5">
-              Code Status: <span className="text-[#FFC107] font-mono font-bold">{user?.hasActiveCode && activeCode ? activeCode : 'Revealed upon Admin Approval'}</span>
-            </span>
-          </div>
-
-          <div className="text-right">
-            <span className="text-[10px] bg-emerald-500/20 text-[#00B875] font-bold px-2.5 py-1 rounded-lg border border-emerald-500/30 inline-block">
-              Mandatory for Payouts
-            </span>
-          </div>
-        </div>
-
-        {/* Existing Active Code Section */}
-        {user?.hasActiveCode && activeCode && (
-          <div className="mt-4 p-4 rounded-2xl mirror-glass border border-emerald-500/35 bg-emerald-950/15 space-y-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4" /> Your Active CashBack Code:
+        {/* ALREADY PURCHASED BANNER */}
+        {hasPurchasedCode && (
+          <div className="mt-4 p-4 rounded-2xl mirror-glass border border-emerald-500/40 bg-emerald-950/20 space-y-3 animate-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-[#00B875]" />
+                CashBack Code Active
               </span>
-              <span className="text-[10px] bg-emerald-500/25 text-emerald-300 font-mono px-2 py-0.5 rounded-full font-bold">
-                READY FOR WITHDRAWAL
+              <span className="text-[10px] bg-emerald-500/25 text-[#00B875] font-mono px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                PURCHASE COMPLETED
               </span>
             </div>
 
-            <div className="flex items-center justify-between bg-black/60 rounded-xl px-3.5 py-2.5 border border-white/10">
+            <p className="text-xs text-emerald-200/90 leading-relaxed">
+              You have already purchased and activated your official CashBack Code. Purchases are disabled as you only need one active code per account.
+            </p>
+
+            <div className="flex items-center justify-between bg-black/60 rounded-xl px-3.5 py-2.5 border border-emerald-500/30">
               <span className="font-mono font-black text-sm sm:text-base text-white tracking-wider">
                 {activeCode}
               </span>
@@ -219,33 +211,43 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
                 className="flex items-center gap-1 text-xs bg-[#00B875] hover:bg-[#008f5a] text-white px-3 py-1.5 rounded-lg font-bold transition-all shadow-md active:scale-95"
               >
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
+                <span>{copied ? 'Copied' : 'Copy Code'}</span>
               </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-[11px] text-slate-300">
-                Code verified. You can now process withdrawals.
-              </p>
-              {onProceedToWithdraw && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onProceedToWithdraw();
-                  }}
-                  className="text-xs text-[#FFC107] font-bold hover:underline flex items-center gap-1"
-                >
-                  <span>Withdraw Now</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
           </div>
         )}
 
+        {/* Pricing Banner */}
+        <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-black/40 border border-amber-500/30 flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider block">
+              Clearance Code Price
+            </span>
+            <span className="text-2xl sm:text-3xl font-extrabold text-[#FFC107] font-mono">
+              ₦8,550
+            </span>
+            <span className="text-[11px] text-slate-300 block mt-0.5">
+              Code Status: <span className="text-[#FFC107] font-mono font-bold">{hasPurchasedCode ? activeCode : 'Revealed upon Admin Approval'}</span>
+            </span>
+          </div>
+
+          <div className="text-right">
+            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border inline-block ${
+              hasPurchasedCode
+                ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/30'
+                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+            }`}>
+              {hasPurchasedCode ? 'Purchased' : 'One-Time Purchase'}
+            </span>
+          </div>
+        </div>
+
         {/* Option 1: Buy with Deposited Balance */}
-        <div className="mt-4 p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2.5">
+        <div className={`mt-4 p-4 rounded-2xl border space-y-2.5 transition-all ${
+          hasPurchasedCode 
+            ? 'bg-white/5 border-white/10 opacity-60' 
+            : 'bg-emerald-950/20 border-emerald-500/30'
+        }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-emerald-500 text-black font-extrabold text-[11px] flex items-center justify-center">
@@ -261,28 +263,41 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
           </div>
 
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            Instantly purchase and activate your official CashBack Code by deducting ₦8,550 directly from your deposited balance.
+            Deduct ₦8,550 directly from your deposited balance to purchase and activate your official CashBack Code.
           </p>
 
           <button
             type="button"
             onClick={handleBuyWithDepositBalance}
-            disabled={depLoading || depositBal < 8550}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(0,184,117,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            disabled={hasPurchasedCode || depLoading || depositBal < 8550}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(0,184,117,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Coins className="w-4 h-4" />
-            <span>{depLoading ? 'Purchasing...' : 'Buy with Deposited Balance (₦8,550)'}</span>
+            {hasPurchasedCode ? (
+              <>
+                <Lock className="w-4 h-4" />
+                <span>Code Already Purchased &amp; Active</span>
+              </>
+            ) : (
+              <>
+                <Coins className="w-4 h-4" />
+                <span>{depLoading ? 'Purchasing...' : 'Buy with Deposited Balance (₦8,550)'}</span>
+              </>
+            )}
           </button>
           
-          {depositBal < 8550 && (
+          {!hasPurchasedCode && depositBal < 8550 && (
             <p className="text-[10px] text-slate-400 text-center">
-              Need more funds? Deposit via Paystack below.
+              Insufficient deposited balance (₦8,550 needed). Pay via Paystack below.
             </p>
           )}
         </div>
 
         {/* Option 2: Pay on Paystack Store */}
-        <div className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+        <div className={`mt-4 p-4 rounded-2xl border space-y-3 transition-all ${
+          hasPurchasedCode 
+            ? 'bg-white/5 border-white/10 opacity-60' 
+            : 'bg-white/5 border-white/10'
+        }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-amber-500 text-black font-extrabold text-[11px] flex items-center justify-center">
@@ -296,58 +311,71 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
           </div>
 
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            Click below to pay <strong>₦8,550</strong> directly on Paystack.
+            Pay <strong>₦8,550</strong> online through the verified Paystack gateway.
           </p>
 
-          <a
-            href={PAYSTACK_CASHBACK_CODE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={handleOpenPaystack}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-black text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,193,7,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Pay ₦8,550 on Paystack</span>
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {hasPurchasedCode ? (
+            <button
+              type="button"
+              disabled={true}
+              className="w-full py-3 rounded-xl bg-white/10 text-slate-400 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+            >
+              <Lock className="w-4 h-4" />
+              <span>Purchase Disabled (Already Active)</span>
+            </button>
+          ) : (
+            <a
+              href={PAYSTACK_CASHBACK_CODE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleOpenPaystack}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-black text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,193,7,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Pay ₦8,550 on Paystack</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
         </div>
 
         {/* Option 3: Input and Activate Purchased Code */}
-        <form onSubmit={handleActivateCode} className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-          <div className="flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-extrabold text-[11px] flex items-center justify-center">
-              3
-            </span>
-            <span className="text-xs font-bold text-white uppercase tracking-wider">
-              Input &amp; Activate Purchased Code
-            </span>
-          </div>
+        {!hasPurchasedCode && (
+          <form onSubmit={handleActivateCode} className="mt-4 p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-purple-500 text-white font-extrabold text-[11px] flex items-center justify-center">
+                3
+              </span>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Input &amp; Activate Purchased Code
+              </span>
+            </div>
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={inputCode}
-              onChange={(e) => setInputCode(e.target.value)}
-              placeholder="Enter purchased code"
-              className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
-              required
-            />
-            <button
-              type="submit"
-              disabled={loading || !inputCode.trim()}
-              className="px-4 py-3 rounded-xl bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md border border-purple-300/30"
-            >
-              {loading ? (
-                <span>Verifying...</span>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Activate</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputCode}
+                onChange={(e) => setInputCode(e.target.value)}
+                placeholder="Enter purchased code"
+                className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
+                required
+              />
+              <button
+                type="submit"
+                disabled={loading || !inputCode.trim()}
+                className="px-4 py-3 rounded-xl bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md border border-purple-300/30"
+              >
+                {loading ? (
+                  <span>Verifying...</span>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Activate</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Footer buttons */}
         <div className="mt-5 flex gap-2">

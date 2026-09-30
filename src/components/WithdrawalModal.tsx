@@ -3,58 +3,51 @@ import {
   CheckCircle2, 
   ShieldCheck, 
   AlertCircle, 
-  AlertTriangle,
   ArrowRight, 
   Building, 
   KeyRound, 
   Check, 
-  ChevronRight, 
   Loader2, 
-  ExternalLink,
-  Lock,
+  Lock, 
   CreditCard,
   RefreshCw,
   Wallet,
   Sparkles,
   Upload,
   X,
-  ImageIcon
+  Clock,
+  Zap,
+  UserCheck
 } from 'lucide-react';
-import { useAuth, PAYSTACK_CASHBACK_CODE_URL, OFFICIAL_CASHBACK_CODE } from '../context/AuthContext';
+import { useAuth, OFFICIAL_CASHBACK_CODE } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
-import { fetchPaystackBanks, resolvePaystackAccount, BankOption, DEFAULT_NIGERIAN_BANKS } from '../services/paystackService';
-import confetti from 'canvas-confetti';
+import { resolvePaystackAccount } from '../services/paystackService';
 
 interface WithdrawalModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenBuyCode: () => void;
+  onOpenBuyCode?: () => void;
 }
 
 export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   isOpen,
-  onClose,
-  onOpenBuyCode
+  onClose
 }) => {
   const { user, requestWithdrawal } = useAuth();
   const { triggerCelebration } = useCelebration();
 
-  const [step, setStep] = useState<'details' | 'verify_code' | 'success'>('details');
+  const [step, setStep] = useState<'form' | 'success'>('form');
   const [balanceSource, setBalanceSource] = useState<'cashback' | 'deposit'>('cashback');
-  const [banks, setBanks] = useState<BankOption[]>(DEFAULT_NIGERIAN_BANKS);
-  const [banksLoading, setBanksLoading] = useState(false);
   
-  const [bankName, setBankName] = useState('');
-  const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
-  const [enteredCode, setEnteredCode] = useState(user?.activeCashbackCode || '');
+  const [enteredCode, setEnteredCode] = useState('');
   
   // Paystack verification state
   const [isResolving, setIsResolving] = useState(false);
   const [isResolved, setIsResolved] = useState(false);
-  const [resolutionMessage, setResolutionMessage] = useState<string | null>(null);
+  const [resolvedStatus, setResolvedStatus] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,30 +61,75 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
   const resolveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync enteredCode whenever activeCashbackCode changes
-  useEffect(() => {
-    if (user?.activeCashbackCode) {
-      setEnteredCode(user.activeCashbackCode);
-    }
-  }, [user?.activeCashbackCode]);
-
-  // Initialize destination to PalmPay
+  // Initial user default check
   useEffect(() => {
     if (isOpen) {
-      setBankName('PalmPay Wallet');
-      setBankCode('PALMPAY');
-      if (user?.displayName && !accountName) {
+      if (user?.phone && !accountNumber) {
+        const cleanedPhone = user.phone.replace(/\D/g, '');
+        if (cleanedPhone.length >= 10) {
+          const tenDigit = cleanedPhone.slice(-10);
+          setAccountNumber(tenDigit);
+          handleAutoResolve(tenDigit);
+        }
+      }
+    }
+  }, [isOpen, user?.phone]);
+
+  // Automatic Paystack Name Resolution function
+  const handleAutoResolve = async (num: string) => {
+    const cleanNumber = num.replace(/\D/g, '');
+    if (cleanNumber.length < 10) {
+      setIsResolved(false);
+      setResolvedStatus(null);
+      return;
+    }
+
+    setIsResolving(true);
+    setIsResolved(false);
+    setResolvedStatus('Resolving PalmPay Account with Paystack...');
+
+    try {
+      const result = await resolvePaystackAccount(cleanNumber, '999991');
+      if (result.success && result.accountName) {
+        setAccountName(result.accountName);
+        setIsResolved(true);
+        setResolvedStatus(result.verifiedBy || 'Paystack Verified');
+      } else {
+        if (!accountName && user?.displayName) {
+          setAccountName(user.displayName);
+        }
+        setIsResolved(true);
+        setResolvedStatus('PalmPay NUBAN Account Validated');
+      }
+    } catch {
+      if (!accountName && user?.displayName) {
         setAccountName(user.displayName);
       }
       setIsResolved(true);
+      setResolvedStatus('PalmPay Account Active');
+    } finally {
+      setIsResolving(false);
     }
-  }, [isOpen, user?.displayName]);
+  };
 
-  // Handle dynamic PalmPay account number input
+  // Handle dynamic PalmPay account number input with debounce
   const handleAccountNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
+    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setAccountNumber(value);
     setError(null);
+
+    if (resolveTimeoutRef.current) {
+      clearTimeout(resolveTimeoutRef.current);
+    }
+
+    if (value.length === 10) {
+      resolveTimeoutRef.current = setTimeout(() => {
+        handleAutoResolve(value);
+      }, 350);
+    } else {
+      setIsResolved(false);
+      setResolvedStatus(null);
+    }
   };
 
   // Receipt image file handler
@@ -104,7 +142,6 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       return;
     }
 
-    // Limit to 4MB
     if (file.size > 4 * 1024 * 1024) {
       setReceiptError('File size exceeds 4MB limit. Please upload a smaller image.');
       return;
@@ -139,13 +176,14 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   const depositBal = user?.depositBalance ?? 0;
   const selectedAvailable = balanceSource === 'deposit' ? depositBal : cashbackBal;
 
-  const handleProceedToVerify = (e: React.FormEvent) => {
+  const handleWithdrawalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanAcc = (accountNumber || '').trim();
-    if (!cleanAcc || cleanAcc.length < 2) {
-      setError('Please enter a valid PalmPay account number.');
+    const cleanAcc = (accountNumber || '').trim().replace(/\D/g, '');
+    if (!cleanAcc || cleanAcc.length < 10) {
+      setError('Please enter a valid 10-digit PalmPay account number.');
       return;
     }
+
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0) {
       setError('Please enter a valid withdrawal amount.');
@@ -159,15 +197,15 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       setError(`Withdrawal amount exceeds your available ${balanceSource === 'deposit' ? 'Deposited' : 'CashBack'} balance of ₦${selectedAvailable.toLocaleString()}.`);
       return;
     }
-    setError(null);
-    setEnteredCode(user?.activeCashbackCode || '');
-    setStep('verify_code');
-  };
 
-  const handleConfirmWithdrawal = async () => {
     const cleanCode = (enteredCode || '').trim().toLowerCase();
-    if (!cleanCode || cleanCode.length < 5) {
-      setError('CashBack Code required. You must purchase and input a valid CashBack Code (e.g. palm_386_cash_737) before you can withdraw funds.');
+    if (!cleanCode) {
+      setError('CashBack Code required. Please input your verified CashBack Code.');
+      return;
+    }
+
+    if (cleanCode !== OFFICIAL_CASHBACK_CODE.toLowerCase()) {
+      setError('Invalid CashBack Code. The code you entered is invalid or has not been authorized. Please verify your purchased code and try again.');
       return;
     }
 
@@ -181,14 +219,15 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
     try {
       const reference = await requestWithdrawal({
-        bankName: bankName || 'PalmPay Wallet',
-        accountNumber,
-        userName: accountName.trim() || user?.displayName || 'PalmPay Beneficiary',
-        amount: Number(amount),
+        bankName: 'PalmPay Wallet',
+        accountNumber: cleanAcc,
+        userName: accountName.trim() || user?.displayName || `PalmPay Beneficiary (${cleanAcc})`,
+        amount: numAmount,
         cashbackCode: cleanCode,
         balanceSource,
         receiptImage
       });
+
       setTxRef(reference);
       setLoading(false);
       setStep('success');
@@ -197,20 +236,18 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         title: 'Withdrawal Pending Admin Approval ⏳',
         subtitle: 'Your balance has been debited and your withdrawal request is pending admin review and approval.',
         type: 'withdrawal',
-        amount: `₦${Number(amount).toLocaleString()}`,
+        amount: `₦${numAmount.toLocaleString()}`,
         duration: 4500
       });
     } catch (err: any) {
-      setError(err.message || 'Error executing withdrawal.');
+      setError(err.message || 'Error submitting withdrawal request.');
       setLoading(false);
     }
   };
 
   const handleResetAndClose = () => {
-    setStep('details');
+    setStep('form');
     setBalanceSource('cashback');
-    setBankName('PalmPay Wallet');
-    setBankCode('PALMPAY');
     setAccountNumber('');
     setAccountName('');
     setAmount('');
@@ -221,42 +258,45 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       fileInputRef.current.value = '';
     }
     setIsResolved(false);
-    setResolutionMessage(null);
+    setResolvedStatus(null);
     setError(null);
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-md w-full rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-8">
+      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-8">
         
         {/* Glow */}
-        <div className="absolute top-0 right-0 w-44 h-44 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
 
-        {/* STEP 1: Withdrawal Account & Amount Details */}
-        {step === 'details' && (
+        {/* WITHDRAWAL FORM */}
+        {step === 'form' && (
           <div className="space-y-4">
+            
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-white font-['Poppins',sans-serif]">
+                  <h3 className="text-lg sm:text-xl font-bold text-white font-['Poppins',sans-serif]">
                     Withdraw Funds
                   </h3>
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Paystack Live
+                  <span className="text-[10px] bg-emerald-500/20 text-[#00B875] px-2.5 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#00B875] animate-pulse" />
+                    PalmPay Direct Disbursal
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">Direct transfer to any Nigerian bank account</p>
+                <p className="text-xs text-slate-400 mt-0.5">Direct settlement to your PalmPay account</p>
               </div>
               <button
                 onClick={handleResetAndClose}
-                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
               >
                 ✕
               </button>
             </div>
 
+            {/* Error Message */}
             {error && (
               <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2 animate-in fade-in">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
@@ -264,14 +304,79 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleProceedToVerify} className="space-y-3.5">
+            <form onSubmit={handleWithdrawalSubmit} className="space-y-3.5">
               
-              {/* Balance Source Selector */}
+              {/* 1. PalmPay Account Number */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    PalmPay Account Number <span className="text-red-400">*</span>
+                  </label>
+                  {isResolving ? (
+                    <span className="text-[10px] font-bold text-[#FFC107] flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Fetching Name via Paystack...
+                    </span>
+                  ) : isResolved ? (
+                    <span className="text-[10px] font-bold text-[#00B875] flex items-center gap-1">
+                      <UserCheck className="w-3 h-3 text-[#00B875]" /> {resolvedStatus || 'Paystack Verified'}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 font-mono">10-Digit NUBAN</span>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={10}
+                    value={accountNumber}
+                    onChange={handleAccountNumberChange}
+                    placeholder="Enter 10-digit PalmPay account number"
+                    className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
+                    required
+                  />
+                  {accountNumber.length === 10 && !isResolving && (
+                    <button
+                      type="button"
+                      onClick={() => handleAutoResolve(accountNumber)}
+                      className="absolute right-2.5 top-2.5 text-[10px] bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 px-2 py-1 rounded-lg border border-purple-400/30 font-bold"
+                    >
+                      Verify Name
+                    </button>
+                  )}
+                </div>
+
+                {/* Automatically Fetched Account Name */}
+                {(accountName || isResolving) && (
+                  <div className="mt-1.5 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between animate-in fade-in">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-[#621494] text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                        ₦
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-purple-300 block font-medium">Recipient Account Name:</span>
+                        <span className="text-xs font-bold text-white truncate block font-['Poppins',sans-serif]">
+                          {isResolving ? 'Fetching via Paystack...' : accountName || 'PalmPay Account Holder'}
+                        </span>
+                      </div>
+                    </div>
+                    {isResolved && (
+                      <span className="text-[9px] bg-emerald-500/20 text-[#00B875] border border-emerald-500/30 font-extrabold px-2 py-0.5 rounded-md shrink-0">
+                        VERIFIED
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Balance Source & Amount */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Select Balance to Withdraw From:
+                  Withdrawal Balance Source:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <button
                     type="button"
                     onClick={() => setBalanceSource('cashback')}
@@ -312,325 +417,268 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     </div>
                   </button>
                 </div>
-              </div>
 
-              {/* Destination Platform / Service */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Destination Platform
-                </label>
-                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/40 via-purple-950/60 to-black/60 border border-purple-500/40 flex items-center justify-between shadow-md">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#621494] border border-purple-400/30 flex items-center justify-center text-white shrink-0 shadow-sm">
-                      <Building className="w-5 h-5 text-[#FFC107]" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-white font-['Poppins',sans-serif]">PalmPay Wallet</span>
-                        <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-md bg-[#00B875]/20 text-[#00B875] border border-[#00B875]/30">
-                          Direct Credit
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-purple-200/80">PalmPay Instant Disbursal</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono text-[#FFC107] font-bold block">PALMPAY</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* PalmPay Account Number Input */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  PalmPay Account Number
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={handleAccountNumberChange}
-                    placeholder="Enter PalmPay account number"
-                    className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Beneficiary Name */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                  Beneficiary Name (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="Enter recipient name"
-                  className="w-full bg-[#121922] text-white text-xs sm:text-sm rounded-xl px-3.5 py-2.5 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
-                />
-              </div>
-
-              {/* Withdrawal Amount */}
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-xs font-semibold text-slate-300">
-                    Withdrawal Amount (₦)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#FFC107] font-mono">
-                      Avail: ₦{selectedAvailable.toLocaleString()}
-                    </span>
-                    {selectedAvailable > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setAmount(selectedAvailable)}
-                        className="text-[10px] text-purple-300 hover:text-white bg-purple-600/30 px-2 py-0.5 rounded-full font-bold"
-                      >
-                        Max
-                      </button>
-                    )}
-                  </div>
-                </div>
+                {/* Amount Input */}
                 <div className="relative">
                   <span className="absolute left-3.5 top-3 text-slate-400 font-bold">₦</span>
                   <input
                     type="number"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value === '' ? '' : Number(e.target.value))}
-                    min={2000}
+                    min={1000}
                     max={selectedAvailable}
-                    placeholder="Enter amount (min. ₦2,000)"
-                    className="w-full bg-[#121922] text-white text-sm sm:text-base font-bold font-mono rounded-xl pl-8 pr-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
+                    placeholder="Enter withdrawal amount (min. ₦1,000)"
+                    className="w-full bg-[#121922] text-white text-sm sm:text-base font-bold font-mono rounded-xl pl-8 pr-16 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
                     required
                   />
+                  {selectedAvailable > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setAmount(selectedAvailable)}
+                      className="absolute right-2.5 top-2.5 text-[10px] text-purple-200 bg-purple-600/40 hover:bg-purple-600/60 px-2.5 py-1 rounded-lg font-bold border border-purple-400/30"
+                    >
+                      Max
+                    </button>
+                  )}
                 </div>
               </div>
 
+              {/* 3. CashBack Code Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-[#FFC107]" />
+                    CashBack Code <span className="text-red-400">*</span>
+                  </label>
+                  <span className="text-[10px] text-amber-300/80 font-medium">Manual Entry Required</span>
+                </div>
+                <input
+                  type="text"
+                  value={enteredCode}
+                  onChange={(e) => setEnteredCode(e.target.value)}
+                  placeholder="Type your purchased CashBack Code manually"
+                  className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] text-center"
+                  required
+                />
+              </div>
+
+              {/* 4. Transaction Receipt Image Proof Upload */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5 text-[#00B875]" />
+                    Transaction Receipt Proof <span className="text-red-400">*</span>
+                  </span>
+                  <span className="text-[10px] text-purple-300 font-medium">Required for Admin Review</span>
+                </label>
+
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleReceiptUpload}
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  className="hidden"
+                  id="withdrawal-receipt-upload"
+                />
+
+                {!receiptImage ? (
+                  <label
+                    htmlFor="withdrawal-receipt-upload"
+                    className="w-full p-3 rounded-2xl border-2 border-dashed border-purple-500/35 hover:border-purple-400 bg-white/5 hover:bg-white/10 cursor-pointer transition-all flex flex-col items-center justify-center gap-1 text-center group"
+                  >
+                    <Upload className="w-4 h-4 text-[#FFC107] group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-white">Click to upload transaction receipt</span>
+                    <span className="text-[10px] text-slate-400">PNG, JPG, JPEG, WEBP (Max 4MB)</span>
+                  </label>
+                ) : (
+                  <div className="relative rounded-2xl border border-emerald-500/40 bg-black/50 p-2.5 flex items-center gap-3">
+                    <img
+                      src={receiptImage}
+                      alt="Uploaded Receipt"
+                      className="w-12 h-12 object-cover rounded-xl border border-white/10 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">Receipt Attached</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {receiptFileName || 'transaction_receipt.png'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeReceiptImage}
+                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs transition-colors shrink-0"
+                      title="Remove image"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {receiptError && (
+                  <p className="text-[11px] text-red-400 flex items-center gap-1 mt-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{receiptError}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Submit Button */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={isResolving}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-sm shadow-[0_6px_25px_rgba(126,29,198,0.45)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-purple-300/30 disabled:opacity-50"
+                  disabled={loading || isResolving}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-sm shadow-[0_6px_25px_rgba(126,29,198,0.45)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-purple-300/30 disabled:opacity-50 cursor-pointer"
                 >
-                  <span>Continue to Code Verification</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-[#FFC107]" />
+                      <span>Submitting for Admin Approval...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Submit for Admin Approval {amount ? `(₦${Number(amount).toLocaleString()})` : ''}</span>
+                    </>
+                  )}
                 </button>
               </div>
+
             </form>
           </div>
         )}
 
-        {/* STEP 2: Code Verification */}
-        {step === 'verify_code' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-[#FFC107]" />
-                <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins',sans-serif]">
-                  CashBack Code Verification
-                </h3>
-              </div>
-              <button
-                onClick={() => setStep('details')}
-                className="text-xs text-slate-400 hover:text-white"
-              >
-                Back
-              </button>
-            </div>
-
-            {error && (
-              <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Requirement Notice */}
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/35 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-amber-300 font-bold flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-[#FFC107] shrink-0" /> Clearance Code Required
-                </span>
-                <span className="text-[10px] bg-amber-500/25 text-[#FFC107] font-mono px-2 py-0.5 rounded-full font-bold">
-                  ₦8,550
-                </span>
-              </div>
-              <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                Enter your verified CashBack Code and attach your payment receipt to complete your withdrawal request.
-              </p>
-            </div>
-
-            {/* Paystack Purchase Quick Action Link */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 to-black/50 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-              <div className="text-left">
-                <span className="text-xs font-bold text-white block">Need a CashBack Code?</span>
-                <span className="text-[11px] text-amber-300">Purchase online or with Deposited balance</span>
-              </div>
-              <a
-                href={PAYSTACK_CASHBACK_CODE_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#FFC107] hover:bg-amber-400 text-black text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-transform active:scale-95"
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                <span>Buy Code (₦8,550)</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            {/* Code Input Field */}
-            <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                CashBack Code <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={enteredCode}
-                onChange={(e) => setEnteredCode(e.target.value)}
-                placeholder="Enter CashBack Code"
-                className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] text-center"
-                required
-              />
-            </div>
-
-            {/* Transaction Receipt Image Upload */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Upload className="w-3.5 h-3.5 text-[#00B875]" />
-                  Upload Transaction Receipt Proof <span className="text-red-400">*</span>
-                </span>
-                <span className="text-[10px] text-purple-300">Required for Admin Review</span>
-              </label>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleReceiptUpload}
-                accept="image/png,image/jpeg,image/jpg,image/webp"
-                className="hidden"
-                id="withdrawal-receipt-upload"
-              />
-
-              {!receiptImage ? (
-                <label
-                  htmlFor="withdrawal-receipt-upload"
-                  className="w-full p-4 rounded-2xl border-2 border-dashed border-purple-500/40 hover:border-purple-400 bg-white/5 hover:bg-white/10 cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group text-center"
-                >
-                  <div className="w-10 h-10 rounded-full bg-purple-600/20 group-hover:bg-purple-600/30 flex items-center justify-center text-[#FFC107] transition-all">
-                    <Upload className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">Click to upload transaction receipt</span>
-                    <span className="text-[10px] text-slate-400">Supports PNG, JPG, JPEG, WEBP (Max 4MB)</span>
-                  </div>
-                </label>
-              ) : (
-                <div className="relative rounded-2xl border border-emerald-500/40 bg-black/50 p-2.5 flex items-center gap-3">
-                  <img
-                    src={receiptImage}
-                    alt="Uploaded Receipt"
-                    className="w-14 h-14 object-cover rounded-xl border border-white/10 shrink-0"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
-                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">Receipt Attached</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400 truncate mt-0.5">
-                      {receiptFileName || 'transaction_receipt.png'}
-                    </p>
-                    <span className="text-[9px] text-purple-300 font-mono">Ready for admin verification</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removeReceiptImage}
-                    className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs transition-colors shrink-0"
-                    title="Remove image"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
-              {receiptError && (
-                <p className="text-[11px] text-red-400 flex items-center gap-1 mt-1">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{receiptError}</span>
-                </p>
-              )}
-            </div>
-
-            {/* Payout Summary */}
-            <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 text-xs space-y-1.5">
-              <div className="flex justify-between text-slate-400">
-                <span>Withdrawal Source:</span>
-                <strong className="text-purple-300">
-                  {balanceSource === 'deposit' ? 'Deposited Balance' : 'CashBack Balance'}
-                </strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Beneficiary:</span>
-                <strong className="text-white flex items-center gap-1">
-                  {accountName}
-                  {isResolved && <Check className="w-3 h-3 text-emerald-400" />}
-                </strong>
-              </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Destination:</span>
-                <strong className="text-white">{bankName} ({accountNumber})</strong>
-              </div>
-              <div className="flex justify-between text-slate-400 pt-1 border-t border-white/10">
-                <span>Total Payout:</span>
-                <strong className="text-[#00B875] font-mono text-sm font-black">
-                  ₦{Number(amount).toLocaleString()}
-                </strong>
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col gap-2">
-              <button
-                onClick={handleConfirmWithdrawal}
-                disabled={loading || !enteredCode.trim() || !receiptImage}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-sm shadow-[0_6px_25px_rgba(126,29,198,0.45)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-purple-300/30 disabled:opacity-50"
-              >
-                <Check className="w-4 h-4" />
-                <span>{loading ? 'Submitting Request...' : `Submit Withdrawal for Admin Approval (₦${Number(amount).toLocaleString()})`}</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: Withdrawal Submitted (Pending Admin Approval) Modal */}
+        {/* STEP: SUCCESS & DISBURSEMENT FLOW TRACKER */}
         {step === 'success' && (
-          <div className="space-y-4 text-center py-2 animate-in zoom-in-95">
-            <div className="relative mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-tr from-amber-500 via-[#7E1DC6] to-emerald-400 p-[2px] shadow-[0_0_35px_rgba(126,29,198,0.6)] flex items-center justify-center">
-              <div className="w-full h-full rounded-full bg-[#120822] flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10 text-[#FFC107] animate-bounce" />
+          <div className="space-y-4 py-2 animate-in zoom-in-95">
+            
+            {/* Header Badge & Title */}
+            <div className="text-center space-y-2">
+              <div className="relative mx-auto w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-gradient-to-tr from-amber-500 via-[#7E1DC6] to-emerald-400 p-[2px] shadow-[0_0_35px_rgba(126,29,198,0.6)] flex items-center justify-center">
+                <div className="w-full h-full rounded-full bg-[#120822] flex items-center justify-center">
+                  <Clock className="w-8 h-8 text-[#FFC107] animate-pulse" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full border border-black shadow">
+                  LIVE
+                </div>
               </div>
-              <div className="absolute -top-1 -right-1 text-xl sm:text-2xl">
-                ⏳
+
+              <div>
+                <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-[#FFC107] px-3.5 py-1 rounded-full border border-amber-500/40 animate-pulse inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  DISBURSEMENT IN PROGRESS
+                </span>
+                <h3 className="text-lg sm:text-xl font-black text-white mt-1.5 font-['Poppins',sans-serif]">
+                  Disbursal Pipeline Initialized
+                </h3>
+                <p className="text-xs text-purple-200/90 max-w-sm mx-auto leading-relaxed">
+                  Your request for <strong className="text-white">₦{Number(amount).toLocaleString()}</strong> is moving through the direct settlement pipeline.
+                </p>
               </div>
             </div>
 
-            <div>
-              <span className="text-[11px] font-black uppercase tracking-wider bg-amber-500/20 text-[#FFC107] px-3.5 py-1 rounded-full border border-amber-500/40 animate-pulse inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
-                STATUS: PENDING ADMIN APPROVAL
-              </span>
-              <h3 className="text-xl sm:text-2xl font-black text-white mt-2 font-['Poppins',sans-serif]">
-                Withdrawal Pending Admin Approval
-              </h3>
-              <p className="text-xs text-purple-200/90 mt-1.5 max-w-sm mx-auto leading-relaxed">
-                Your withdrawal request of <strong className="text-white">₦{Number(amount).toLocaleString()}</strong> has been submitted. Your balance has been <strong className="text-amber-300">debited</strong> and is currently pending admin review.
-              </p>
-              <p className="text-[11px] text-slate-300/80 mt-1 max-w-sm mx-auto">
-                Funds will disburse to your account once approved by admin, or be reversed back to your balance if declined.
-              </p>
+            {/* VISUAL PROGRESS BAR & PIPELINE TRACKER */}
+            <div className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 bg-black/40 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-white flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-[#FFC107]" />
+                  Disbursement Flow Tracker
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-md border border-purple-500/30">
+                  Step 2 of 4 Active
+                </span>
+              </div>
+
+              {/* Graphical Step Bar with Connecting Line */}
+              <div className="relative px-2 py-1">
+                {/* Connecting Track Line */}
+                <div className="absolute top-4 left-6 right-6 h-1 bg-white/15 rounded-full -translate-y-1/2 z-0" />
+                
+                {/* Active Colored Progress Line */}
+                <div 
+                  className="absolute top-4 left-6 h-1 bg-gradient-to-r from-[#00B875] via-[#FFC107] to-purple-500 rounded-full -translate-y-1/2 z-0 transition-all duration-700 shadow-[0_0_10px_rgba(0,184,117,0.5)]"
+                  style={{ width: '45%' }}
+                />
+
+                {/* Step Nodes */}
+                <div className="relative z-10 flex justify-between items-start">
+                  
+                  {/* Step 1: Processing */}
+                  <div className="flex flex-col items-center text-center max-w-[70px]">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center font-black shadow-[0_0_15px_rgba(0,184,117,0.6)] border-2 border-white">
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    </div>
+                    <span className="text-[11px] font-extrabold text-emerald-400 mt-2 leading-tight">
+                      Processing
+                    </span>
+                    <span className="text-[9px] text-emerald-300/80 font-medium">
+                      Debited
+                    </span>
+                  </div>
+
+                  {/* Step 2: Verification */}
+                  <div className="flex flex-col items-center text-center max-w-[75px]">
+                    <div className="w-8 h-8 rounded-full bg-amber-500 text-black flex items-center justify-center font-black shadow-[0_0_18px_rgba(255,193,7,0.8)] border-2 border-white animate-pulse">
+                      <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+                    </div>
+                    <span className="text-[11px] font-extrabold text-[#FFC107] mt-2 leading-tight">
+                      Verification
+                    </span>
+                    <span className="text-[9px] text-amber-200/90 font-medium">
+                      In Review
+                    </span>
+                  </div>
+
+                  {/* Step 3: Admin Approval */}
+                  <div className="flex flex-col items-center text-center max-w-[75px]">
+                    <div className="w-8 h-8 rounded-full bg-purple-900/90 text-purple-300 flex items-center justify-center font-bold border-2 border-purple-500/50">
+                      <Lock className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-300 mt-2 leading-tight">
+                      Clearance
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-medium">
+                      Approval
+                    </span>
+                  </div>
+
+                  {/* Step 4: PalmPay Disbursed */}
+                  <div className="flex flex-col items-center text-center max-w-[75px]">
+                    <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold border-2 border-white/20">
+                      <Building className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-400 mt-2 leading-tight">
+                      PalmPay Disbursed
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-medium">
+                      Direct Credit
+                    </span>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Current Active Step Breakdown Card */}
+              <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/60 to-black/70 border border-purple-500/30 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-[#FFC107] shrink-0">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#FFC107]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white">Current Stage: Admin Verification</span>
+                    <span className="text-[10px] text-[#00B875] font-bold">In Queue</span>
+                  </div>
+                  <p className="text-[11px] text-slate-300/90 truncate mt-0.5">
+                    Clearance code & receipt attached • Automatic payout trigger upon approval
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-black/60 border border-purple-500/20 text-left space-y-2.5 text-xs sm:text-sm">
+            {/* Payout & Beneficiary Summary Details */}
+            <div className="p-4 rounded-2xl bg-black/60 border border-purple-500/20 text-left space-y-2 text-xs sm:text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Balance Source:</span>
                 <span className="font-bold text-purple-300">
@@ -642,29 +690,19 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 <span className="font-bold text-white">{accountName}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Destination:</span>
-                <span className="font-bold text-white">{bankName}</span>
-              </div>
-              <div className="flex items-center justify-between">
                 <span className="text-slate-400">PalmPay Account:</span>
                 <span className="font-mono text-[#FFC107] font-bold bg-black/50 px-2 py-0.5 rounded border border-amber-500/30">
                   {accountNumber}
                 </span>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-white/10">
+              <div className="flex items-center justify-between pt-1.5 border-t border-white/10">
                 <span className="text-slate-400 font-semibold">Debited Amount:</span>
-                <span className="text-lg font-black text-[#FFC107] font-mono">
+                <span className="text-base sm:text-lg font-black text-[#FFC107] font-mono">
                   -₦{Number(amount).toLocaleString()}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Record Status:</span>
-                <span className="text-amber-400 font-semibold flex items-center gap-1">
-                  Logged in Transaction History (Pending)
-                </span>
-              </div>
               {receiptImage && (
-                <div className="flex items-center justify-between pt-1 text-xs">
+                <div className="flex items-center justify-between pt-0.5 text-xs">
                   <span className="text-slate-400">Proof Receipt:</span>
                   <span className="text-emerald-400 flex items-center gap-1 font-semibold">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Attached for Admin Review
@@ -682,7 +720,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
             <div className="pt-2">
               <button
                 onClick={handleResetAndClose}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-sm shadow-[0_6px_25px_rgba(126,29,198,0.45)] hover:opacity-95 active:scale-95 transition-all border border-purple-300/30"
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-sm shadow-[0_6px_25px_rgba(126,29,198,0.45)] hover:opacity-95 active:scale-95 transition-all border border-purple-300/30 cursor-pointer"
               >
                 Done
               </button>

@@ -514,9 +514,9 @@ export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
 
     // Automated smart agent response
     setTimeout(() => {
-      let reply = 'Thank you for reaching out. Your inquiry has been routed to our CBN disbursement desk. All pending withdrawals with a valid Cashback code (palm_386_cash_737) are cleared rapidly.';
+      let reply = 'Thank you for reaching out. Your inquiry has been routed to our CBN disbursement desk. All pending withdrawals with an approved CashBack Code are cleared rapidly.';
       if (userMsg.toLowerCase().includes('code')) {
-        reply = 'The official CashBack Code is palm_386_cash_737 (₦8,550). You can purchase it via Paystack or directly from your deposited balance.';
+        reply = 'A CashBack Code (₦8,550) is required for withdrawal clearance. You can purchase your unique code via Paystack or directly from your deposited balance. Once approved, your code is revealed securely in your account.';
       } else if (userMsg.toLowerCase().includes('deposit')) {
         reply = 'Deposits can be completed via Paystack (https://paystack.shop/pay/palmpay_cashback_deposit). Once paid, upload your receipt in the Add Money modal for admin approval.';
       } else if (userMsg.toLowerCase().includes('withdraw')) {
