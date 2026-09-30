@@ -283,13 +283,13 @@ export const AdminPanel: React.FC = () => {
     }
   }, [withdrawalRequests]);
 
-  const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
+  const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected', force = false) => {
     try {
       if (newStatus === 'approved') {
         setApprovingWithdrawalId(id);
         setWithdrawalAlert(null);
 
-        const result = await approveWithdrawalRequest(id);
+        const result = await approveWithdrawalRequest(id, force);
         setApprovingWithdrawalId(null);
 
         if (result.success) {
@@ -864,7 +864,7 @@ export const AdminPanel: React.FC = () => {
                               ) : (
                                 <>
                                   <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Approve &amp; Disburse</span>
+                                  <span>Approve &amp; Disburse (₦{req.amount.toLocaleString()})</span>
                                 </>
                               )}
                             </button>
@@ -877,6 +877,48 @@ export const AdminPanel: React.FC = () => {
                               <span>Decline</span>
                             </button>
                           </>
+                        )}
+
+                        {(req.status === 'successful' || req.status === 'approved') && (
+                          <button
+                            disabled={isApproving}
+                            onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                            className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                            title="Force re-send disbursal of exact amount to Site B"
+                          >
+                            {isApproving ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Re-syncing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 text-purple-300" />
+                                <span>Re-send to Site B (₦{req.amount.toLocaleString()})</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {req.status === 'failed' && (
+                          <button
+                            disabled={isApproving}
+                            onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                            className="px-3 py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                            title="Retry disbursing exact amount to Site B"
+                          >
+                            {isApproving ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Retrying...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Retry Disbursal (₦{req.amount.toLocaleString()})</span>
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1429,20 +1471,20 @@ export const AdminPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Test Ping Gateway Tool */}
+            {/* Interactive Test Ping Gateway Tool */}
           <div className="mirror-glass-card rounded-2xl p-5 border border-white/10 space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-white/10">
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-emerald-400" />
                 <h4 className="text-sm font-bold text-white font-['Poppins',sans-serif]">
-                  Interactive Gateway Test &amp; Diagnostics
+                  Gateway Connectivity Diagnostics (Zero-Amount Probe)
                 </h4>
               </div>
-              <span className="text-[10px] text-slate-400">Test 200 Success &amp; 404 Account Not Found</span>
+              <span className="text-[10px] text-slate-400">Non-financial test ping</span>
             </div>
 
             <p className="text-xs text-slate-300">
-              Verify Site B API responses in real-time. Enter any account number or click a test preset below:
+              Verify Site B API connectivity in real-time. This diagnostic test checks server availability and response headers without transferring or debiting any real user funds.
             </p>
 
             <div className="flex flex-wrap items-center gap-2">

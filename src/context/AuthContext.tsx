@@ -88,7 +88,7 @@ interface AuthContextType {
     balanceSource: 'cashback' | 'deposit';
     receiptImage?: string;
   }) => Promise<string>;
-  approveWithdrawalRequest: (requestId: string) => Promise<{ success: boolean; message: string; status?: number }>;
+  approveWithdrawalRequest: (requestId: string, force?: boolean) => Promise<{ success: boolean; message: string; status?: number }>;
   rejectWithdrawalRequest: (requestId: string, reason?: string) => Promise<void>;
   withdrawalRequests: WithdrawalRequest[];
 
@@ -1554,7 +1554,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Admin approves withdrawal request -> Disburses to Site B via Server-to-Server API
-  const approveWithdrawalRequest = async (requestId: string): Promise<{ success: boolean; message: string; status?: number }> => {
+  const approveWithdrawalRequest = async (requestId: string, force = false): Promise<{ success: boolean; message: string; status?: number }> => {
     try {
       const docRef = doc(db, 'withdrawal_requests', requestId);
       let reqData: WithdrawalRequest | undefined = withdrawalRequests.find((r) => r.id === requestId);
@@ -1574,11 +1574,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Withdrawal request not found in database.');
       }
 
-      if (reqData.status === 'successful' || reqData.status === 'approved') {
-        return { success: true, message: 'This withdrawal request has already been approved and disbursed.' };
+      if (!force && (reqData.status === 'successful' || reqData.status === 'approved')) {
+        return { success: true, message: `This withdrawal request of ₦${Number(reqData.amount).toLocaleString()} has already been approved and disbursed.` };
       }
 
-      // Step 1: Call Site A backend server endpoint to securely POST to Site B
+      // Step 1: Call Site A backend server endpoint to securely POST to Site B with full amount
       const response = await fetch('/api/admin/withdrawals/approve', {
         method: 'POST',
         headers: {
@@ -1588,6 +1588,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           withdrawalId: reqData.id,
           accountNumber: reqData.accountNumber,
           amount: Number(reqData.amount),
+          userEmail: reqData.userEmail,
+          userName: reqData.userName,
           senderName: 'PalmPay Cashback',
           transactionReference: reqData.reference || reqData.id
         })
