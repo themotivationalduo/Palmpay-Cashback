@@ -87,43 +87,41 @@ const DashboardContent: React.FC<{
         </div>
       )}
 
-      {/* 3. Code System Initiative View: Buy CashBack Code (₦8,550) */}
+      {/* 3. CashBack Code Portal */}
       {currentPage === 'code' && (
-        <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
-          <div className="mirror-glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl relative">
-            <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-              <div className="p-3 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-black shadow-lg">
-                <KeyRound className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-white font-['Poppins',sans-serif]">
-                  CashBack Code Portal (₦8,550)
-                </h2>
-                <p className="text-xs text-slate-300">
-                  Automated CBN withdrawal authentication and clearance service
-                </p>
-              </div>
+        <div className="max-w-xl mx-auto space-y-6 py-4 sm:py-8 animate-in fade-in duration-300">
+          <div className="mirror-glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl relative text-center space-y-6">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-[#FFC107] text-black shadow-lg flex items-center justify-center">
+              <KeyRound className="w-7 h-7" />
             </div>
 
-            <div className="mt-6 space-y-4">
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs sm:text-sm text-slate-200 leading-relaxed">
-                Every member requires a single-use verified CashBack Code to unlock large automated payouts from their vault. Click below to inspect active codes or purchase a new one.
-              </div>
+            <div className="space-y-1.5">
+              <h2 className="text-xl sm:text-2xl font-bold text-white font-['Poppins',sans-serif]">
+                CashBack Code Portal
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300">
+                Official PalmPay Clearance &amp; Withdrawal Verification
+              </p>
+            </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  onClick={onOpenBuyCode}
-                  className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-extrabold text-sm shadow-lg hover:opacity-95 active:scale-95 transition-all text-center"
-                >
-                  Buy CashBack Code (₦8,550)
-                </button>
-                <button
-                  onClick={onOpenVerification}
-                  className="flex-1 py-3.5 rounded-2xl mirror-glass hover:bg-white/10 text-white font-bold text-sm border border-white/20 transition-all text-center"
-                >
-                  Check Active Code Status
-                </button>
-              </div>
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between">
+              <span className="text-xs sm:text-sm text-slate-300 font-medium">Standard Clearance Fee:</span>
+              <span className="text-lg sm:text-xl font-extrabold text-[#FFC107] font-mono">₦8,550</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                onClick={onOpenBuyCode}
+                className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-extrabold text-sm shadow-lg hover:opacity-95 active:scale-95 transition-all text-center"
+              >
+                Buy CashBack Code (₦8,550)
+              </button>
+              <button
+                onClick={onOpenVerification}
+                className="flex-1 py-3.5 rounded-2xl mirror-glass hover:bg-white/10 text-white font-bold text-sm border border-white/20 transition-all text-center"
+              >
+                Check Code Status
+              </button>
             </div>
           </div>
         </div>

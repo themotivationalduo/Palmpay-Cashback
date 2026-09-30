@@ -84,16 +84,47 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
     }
   });
 
-  // 3. Add regular transactions
+  // 3. Add regular transactions (resolving latest approval status from requests)
   (transactions || []).forEach((tx) => {
+    const matchingWd = (withdrawalRequests || []).find(
+      (w) => w.reference === tx.reference || w.id === tx.id || `WD-${w.id}` === tx.reference || `WD-${w.reference}` === tx.reference
+    );
+    const matchingDep = (depositRequests || []).find(
+      (d) => d.paymentReference === tx.reference || d.id === tx.id
+    );
+
+    let resolvedStatus: 'pending' | 'completed' | 'approved' | 'rejected' | 'won' = 
+      (tx.status as string) === 'approved' ? 'completed' : (tx.status as any);
+    let resolvedTitle = tx.title;
+
+    if (matchingWd) {
+      if (matchingWd.status === 'successful' || matchingWd.status === 'approved') {
+        resolvedStatus = 'completed';
+        if (resolvedTitle.toLowerCase().includes('pending') || resolvedTitle.startsWith('Withdrawal Request')) {
+          resolvedTitle = `Withdrawal to ${matchingWd.bankName || 'PalmPay Account'} (${matchingWd.accountNumber ? matchingWd.accountNumber.slice(0, 3) + '***' : ''})`;
+        }
+      } else if (matchingWd.status === 'rejected' || matchingWd.status === 'failed') {
+        resolvedStatus = 'rejected';
+      }
+    } else if (matchingDep) {
+      if (matchingDep.status === 'approved') {
+        resolvedStatus = 'completed';
+        if (resolvedTitle.toLowerCase().includes('pending') || resolvedTitle.startsWith('Deposit Request')) {
+          resolvedTitle = `Deposit Credited (₦${matchingDep.amount.toLocaleString()})`;
+        }
+      } else if (matchingDep.status === 'rejected') {
+        resolvedStatus = 'rejected';
+      }
+    }
+
     allLedgerItems.push({
       id: tx.id,
-      title: tx.title,
+      title: resolvedTitle,
       amount: tx.amount,
       type: tx.type,
       category: tx.category,
       timestamp: Number(tx.timestamp),
-      status: (tx.status as string) === 'approved' ? 'completed' : (tx.status as any),
+      status: resolvedStatus,
       reference: tx.reference,
       email: tx.email,
       balanceSource: tx.balanceSource

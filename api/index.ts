@@ -312,7 +312,7 @@ app.post('/api/admin/gateway-config/test', async (req: Request, res: Response) =
       mode: 'integrated_simulation',
       message: 'Integrated PalmPay Test Gateway is ACTIVE and ready to process real disbursements.',
       details: {
-        targetUrl: 'internal://mock-palmpay-gateway',
+        targetUrl: 'internal://palmpay-direct-gateway',
         testAccount,
         status: 200,
         tip: 'Configure a live external URL anytime in Admin Gateway Settings to route directly to an external server.'

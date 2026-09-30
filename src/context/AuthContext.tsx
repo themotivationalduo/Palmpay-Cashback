@@ -1627,14 +1627,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           getLocalWithdrawalRequests().map((r) => (r.id === requestId ? updatedWd : r))
         );
 
-        // 2. Mark the corresponding transaction as "completed" (balance was already debited on placement)
+        // 2. Mark the corresponding transaction as "completed" in Firestore, state and storage
         const targetRef = reqData.reference;
         const targetId = reqData.id;
+
+        // Update Firestore transactions collection
+        try {
+          // Query by reference or ID
+          const txRefQuery = query(collection(db, 'transactions'), where('reference', '==', targetRef || targetId));
+          const txSnap = await getDocs(txRefQuery);
+          if (!txSnap.empty) {
+            for (const d of txSnap.docs) {
+              await updateDoc(doc(db, 'transactions', d.id), {
+                status: 'completed',
+                title: `Withdrawal to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})`,
+                processedAt: Date.now()
+              });
+            }
+          } else {
+            // Also check direct document ID
+            const directTxRef = doc(db, 'transactions', targetId);
+            const directSnap = await getDoc(directTxRef);
+            if (directSnap.exists()) {
+              await updateDoc(directTxRef, {
+                status: 'completed',
+                title: `Withdrawal to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})`,
+                processedAt: Date.now()
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Firestore transaction complete status update error:', e);
+        }
 
         setTransactions((prev) =>
           prev.map((t) =>
             t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
-              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
+              ? { ...t, status: 'completed' as const, title: `Withdrawal to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
               : t
           )
         );
@@ -1642,7 +1671,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         saveLocalTransactions(
           getLocalTransactions().map((t) =>
             t.reference === targetRef || t.id === targetId || t.reference === `WD-${targetId}`
-              ? { ...t, status: 'completed' as const, title: `Withdrawal Disbursed to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
+              ? { ...t, status: 'completed' as const, title: `Withdrawal to ${reqData?.bankName || 'PalmPay Account'} (${reqData?.accountNumber})` }
               : t
           )
         );
@@ -1832,6 +1861,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         await setDoc(doc(db, 'transactions', revTxId), revTx);
+        
+        // Also update the original pending transaction in Firestore
+        if (targetRef || targetId) {
+          const origTxQuery = query(collection(db, 'transactions'), where('reference', '==', targetRef || targetId));
+          const origTxSnap = await getDocs(origTxQuery);
+          if (!origTxSnap.empty) {
+            for (const d of origTxSnap.docs) {
+              await updateDoc(doc(db, 'transactions', d.id), {
+                status: 'rejected',
+                title: `${d.data().title || 'Withdrawal'} [Declined & Reversed]`,
+                processedAt: Date.now()
+              });
+            }
+          }
+        }
       } catch (e) {
         console.warn('Firestore reversal tx error:', e);
       }

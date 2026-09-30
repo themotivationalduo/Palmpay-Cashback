@@ -37,9 +37,9 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
     if (success) {
       triggerCelebration({
         title: 'Welcome Bonus Claimed! 🎁',
-        subtitle: '₦2,000 instant welcome bonus has been deposited to your CashBack vault.',
+        subtitle: '₦150,000 instant welcome bonus has been deposited to your CashBack vault.',
         type: 'bonus',
-        amount: '₦2,000',
+        amount: '₦150,000',
         duration: 4000
       });
     }

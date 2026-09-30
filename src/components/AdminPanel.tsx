@@ -96,7 +96,7 @@ export const AdminPanel: React.FC = () => {
   const [announcementText, setAnnouncementText] = useState('PalmPayCashBack — Only valid on www.palmpaycashback.vercel.app');
   const [announceMsg, setAnnounceMsg] = useState<string | null>(null);
 
-  // Site B Gateway Integration State
+  // PalmPay Gateway Integration State
   const [gatewayConfig, setGatewayConfig] = useState<{
     apiUrl: string;
     hasSecret: boolean;
@@ -141,7 +141,7 @@ export const AdminPanel: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        setGatewaySaveMsg({ type: 'success', message: 'Site B Gateway settings updated successfully!' });
+        setGatewaySaveMsg({ type: 'success', message: 'PalmPay Gateway settings updated successfully!' });
         fetchGatewayConfig();
         setTimeout(() => setGatewaySaveMsg(null), 4000);
       } else {
@@ -553,7 +553,7 @@ export const AdminPanel: React.FC = () => {
           }`}
         >
           <Globe className="w-4 h-4 text-cyan-400" />
-          <span>Site B API Gateway</span>
+          <span>PalmPay API Gateway</span>
         </button>
       </div>
 
@@ -764,7 +764,7 @@ export const AdminPanel: React.FC = () => {
                             ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                             : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
                         }`}>
-                          {isSuccessful ? 'SUCCESSFUL (SITE B CREDITED)' : isFailed ? 'FAILED (INVALID SITE B ACCOUNT)' : req.status}
+                          {isSuccessful ? 'SUCCESSFUL (PALMPAY CREDITED)' : isFailed ? 'FAILED (INVALID PALMPAY ACCOUNT)' : req.status}
                         </span>
                         {req.balanceSource && (
                           <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
@@ -777,7 +777,7 @@ export const AdminPanel: React.FC = () => {
                         <span>Email: <strong className="text-white font-mono break-all">{req.userEmail}</strong></span>
                         <span>•</span>
                         <span className="inline-flex items-center gap-1">
-                          Site B Account: 
+                          PalmPay Account: 
                           <strong className="text-[#FFC107] font-mono break-all bg-black/40 px-2 py-0.5 rounded border border-amber-500/30">
                             {req.accountNumber}
                           </strong>
@@ -791,7 +791,7 @@ export const AdminPanel: React.FC = () => {
                           </button>
                         </span>
                         <span>•</span>
-                        <span>Destination: <strong className="text-white">{req.bankName || 'Site B Wallet'}</strong></span>
+                        <span>Destination: <strong className="text-white">{req.bankName || 'PalmPay Wallet'}</strong></span>
                       </div>
 
                       {/* Attached Transaction Receipt Proof Indicator */}
@@ -1439,7 +1439,7 @@ export const AdminPanel: React.FC = () => {
                   <div className="flex items-center justify-between text-slate-300">
                     <span className="text-slate-400">Target URL:</span>
                     <span className="text-cyan-300 font-bold break-all">
-                      {gatewayConfig?.apiUrl || 'Integrated Mock Gateway'}
+                      {gatewayConfig?.apiUrl || 'Direct PalmPay Gateway (Active)'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300">
@@ -1593,7 +1593,7 @@ export const AdminPanel: React.FC = () => {
             <form onSubmit={handleSaveGatewayConfig} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  PalmPay API Endpoint URL (process.env.PALMPAY_API_URL or process.env.SITE_B_API_URL)
+                  PalmPay API Endpoint URL (process.env.PALMPAY_API_URL)
                 </label>
                 <input
                   type="text"

@@ -316,8 +316,8 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
               {/* Destination Platform / Service */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Destination Platform (PalmPay Direct Disbursal)
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Destination Platform
                 </label>
                 <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-900/40 via-purple-950/60 to-black/60 border border-purple-500/40 flex items-center justify-between shadow-md">
                   <div className="flex items-center gap-3">
@@ -331,57 +331,49 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                           Direct Credit
                         </span>
                       </div>
-                      <p className="text-[11px] text-purple-200/80">PalmPay Cashback Instant Payout</p>
+                      <p className="text-[11px] text-purple-200/80">PalmPay Instant Disbursal</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-mono text-[#FFC107] font-bold block">ROUTE: PALMPAY</span>
+                    <span className="text-[10px] font-mono text-[#FFC107] font-bold block">PALMPAY</span>
                   </div>
                 </div>
               </div>
 
-              {/* Dynamic PalmPay Account Number Input */}
+              {/* PalmPay Account Number Input */}
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-slate-300 block">
-                    PalmPay Account Number
-                  </label>
-                  <span className="text-[10px] text-purple-300">
-                    Input PalmPay account or phone number
-                  </span>
-                </div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  PalmPay Account Number
+                </label>
                 <div className="relative">
                   <input
                     type="text"
                     value={accountNumber}
                     onChange={handleAccountNumberChange}
-                    placeholder="Enter PalmPay account number (e.g. 8012345678)"
+                    placeholder="Enter PalmPay account number"
                     className="w-full bg-[#121922] text-white text-xs sm:text-sm font-mono rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
                     required
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  💡 Enter your 10-digit PalmPay account number or beneficiary PalmPay recipient ID.
-                </p>
               </div>
 
-              {/* Account / Beneficiary Name (Optional customization) */}
+              {/* Beneficiary Name */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Beneficiary Name (Optional Reference)
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Beneficiary Name (Optional)
                 </label>
                 <input
                   type="text"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="e.g. My PalmPay Account or Beneficiary Name"
+                  placeholder="Enter recipient name"
                   className="w-full bg-[#121922] text-white text-xs sm:text-sm rounded-xl px-3.5 py-2.5 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
                 />
               </div>
 
               {/* Withdrawal Amount */}
               <div>
-                <div className="flex justify-between items-center mb-1">
+                <div className="flex justify-between items-center mb-1.5">
                   <label className="text-xs font-semibold text-slate-300">
                     Withdrawal Amount (₦)
                   </label>
@@ -429,7 +421,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: Code Verification (Mandatory Cashback Code: palm_386_cash_737) */}
+        {/* STEP 2: Code Verification */}
         {step === 'verify_code' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -454,26 +446,26 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               </div>
             )}
 
-            {/* Mandatory Requirement Warning */}
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/35 space-y-2">
+            {/* Requirement Notice */}
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/15 border border-amber-500/35 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-amber-300 font-bold flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-[#FFC107] shrink-0" /> Mandatory CBN Clearance Notice
+                  <AlertTriangle className="w-4 h-4 text-[#FFC107] shrink-0" /> Clearance Code Required
                 </span>
                 <span className="text-[10px] bg-amber-500/25 text-[#FFC107] font-mono px-2 py-0.5 rounded-full font-bold">
-                  FEE: ₦8,550
+                  ₦8,550
                 </span>
               </div>
               <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                ⚠️ You must purchase a valid CashBack Code and upload your transaction receipt proof, or else your withdrawal request will be declined by the admin clearing protocol.
+                Enter your verified CashBack Code and attach your payment receipt to complete your withdrawal request.
               </p>
             </div>
 
             {/* Paystack Purchase Quick Action Link */}
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 to-black/50 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-2.5">
               <div className="text-left">
-                <span className="text-xs font-bold text-white block">Don't have a code yet?</span>
-                <span className="text-[11px] text-amber-300">Purchase securely on Paystack or via Deposit balance</span>
+                <span className="text-xs font-bold text-white block">Need a CashBack Code?</span>
+                <span className="text-[11px] text-amber-300">Purchase online or with Deposited balance</span>
               </div>
               <a
                 href={PAYSTACK_CASHBACK_CODE_URL}
@@ -489,14 +481,14 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
             {/* Code Input Field */}
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">
-                Enter or Paste CashBack Code <span className="text-red-400">*</span>
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                CashBack Code <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
                 value={enteredCode}
                 onChange={(e) => setEnteredCode(e.target.value)}
-                placeholder="Enter CashBack Code (e.g. palm_386_cash_737)"
+                placeholder="Enter CashBack Code"
                 className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] text-center"
                 required
               />
