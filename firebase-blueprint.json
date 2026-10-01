@@ -1,0 +1,131 @@
+{
+  "entities": {
+    "user": {
+      "title": "User Profile",
+      "description": "Registered PalmPay cashback portal user account",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "phone": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "balance": { "type": "number" },
+        "depositBalance": { "type": "number" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "number" },
+        "signupBonusClaimed": { "type": "boolean" },
+        "memberSince": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "hasActiveCode": { "type": "boolean" },
+        "activeCashbackCode": { "type": "string" }
+      },
+      "required": ["uid", "email", "displayName", "balance", "depositBalance", "role"]
+    },
+    "transaction": {
+      "title": "Transaction Record",
+      "description": "User ledger transaction entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "title": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
+        "category": { "type": "string" },
+        "balanceSource": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["completed", "pending", "rejected"] },
+        "reference": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "receiptImage": { "type": "string" }
+      },
+      "required": ["uid", "title", "amount", "type", "category", "timestamp", "status"]
+    },
+    "withdrawalRequest": {
+      "title": "Withdrawal Request",
+      "description": "User withdrawal request sent for admin approval and site B disbursal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "amount": { "type": "number" },
+        "balanceSource": { "type": "string" },
+        "cashbackCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "successful", "failed"] },
+        "reference": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "processedAt": { "type": "number" },
+        "adminNote": { "type": "string" }
+      },
+      "required": ["uid", "userEmail", "accountNumber", "amount", "cashbackCode", "status", "createdAt"]
+    },
+    "depositRequest": {
+      "title": "Deposit Request",
+      "description": "Deposit request with transaction proof",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "amount": { "type": "number" },
+        "receiptImage": { "type": "string" },
+        "paymentReference": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" },
+        "processedAt": { "type": "number" },
+        "adminNote": { "type": "string" }
+      },
+      "required": ["uid", "userEmail", "amount", "status", "createdAt"]
+    },
+    "codeOrder": {
+      "title": "CashBack Code Order",
+      "description": "Order for purchasing a cashback code",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "codePrice": { "type": "number" },
+        "generatedCode": { "type": "string" },
+        "status": { "type": "string", "enum": ["approved", "pending", "rejected"] },
+        "paymentReference": { "type": "string" },
+        "paymentSource": { "type": "string" },
+        "receiptImage": { "type": "string" },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "userEmail", "codePrice", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Individual user accounts with balance and profile data"
+    },
+    "/transactions/{txId}": {
+      "schema": "transaction",
+      "description": "Transaction ledger entries per user"
+    },
+    "/withdrawal_requests/{reqId}": {
+      "schema": "withdrawalRequest",
+      "description": "Withdrawal requests queued for admin approval and site B disbursal"
+    },
+    "/deposit_requests/{depId}": {
+      "schema": "depositRequest",
+      "description": "Deposit requests queued for receipt review"
+    },
+    "/code_orders/{orderId}": {
+      "schema": "codeOrder",
+      "description": "Cashback code orders"
+    }
+  }
+}

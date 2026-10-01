@@ -103,9 +103,23 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
               )}
 
               {details.adminNote && (
-                <div className="py-1">
-                  <span className="text-slate-400 block mb-1">Admin / Review Note:</span>
-                  <p className="p-2.5 rounded-xl bg-white/5 text-rose-200 italic text-[11px] border border-white/10">
+                <div className="py-1.5">
+                  <span className="text-slate-400 text-xs font-semibold block mb-1 flex items-center gap-1.5">
+                    {details.adminNote.includes('WARNING') || details.adminNote.includes('⚠️') ? (
+                      <span className="text-amber-400 font-bold flex items-center gap-1">
+                        ⚠️ Admin Warning / Alert Notice:
+                      </span>
+                    ) : (
+                      <span className="text-purple-300 font-bold flex items-center gap-1">
+                        💬 Admin Review Note:
+                      </span>
+                    )}
+                  </span>
+                  <p className={`p-3 rounded-xl italic text-xs leading-relaxed border ${
+                    details.adminNote.includes('WARNING') || details.adminNote.includes('⚠️')
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-100 font-medium'
+                      : 'bg-white/5 border-white/15 text-slate-200'
+                  }`}>
                     "{details.adminNote}"
                   </p>
                 </div>

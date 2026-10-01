@@ -475,9 +475,15 @@ export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                   )}
 
                   {dep.adminNote && (
-                    <p className="text-[11px] text-red-300/90 pt-1 border-t border-white/5">
-                      Note: {dep.adminNote}
-                    </p>
+                    <div className="pt-1.5 border-t border-white/5">
+                      <p className={`text-[11px] p-2 rounded-lg leading-relaxed ${
+                        dep.adminNote.includes('WARNING') || dep.adminNote.includes('⚠️')
+                          ? 'bg-amber-500/10 text-amber-200 border border-amber-500/20 font-medium'
+                          : 'bg-white/5 text-purple-200 border border-white/10'
+                      }`}>
+                        {dep.adminNote}
+                      </p>
+                    </div>
                   )}
                 </div>
               ))

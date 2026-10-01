@@ -27,12 +27,29 @@ import {
   Server,
   Activity,
   Check,
-  Copy
+  Copy,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import { useAuth, getLocalWithdrawalRequests } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { db, collection, query, onSnapshot, updateDoc, doc, addDoc, getDocs } from '../lib/firebase';
 import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile } from '../types';
+
+export interface ActionPromptState {
+  isOpen: boolean;
+  type: 'approve_withdrawal' | 'reject_withdrawal' | 'approve_deposit' | 'reject_deposit' | 'approve_code' | 'reject_code';
+  id: string;
+  userName: string;
+  userEmail: string;
+  amount?: number;
+  accountNumber?: string;
+  bankName?: string;
+  reference?: string;
+  code?: string;
+  customMessage: string;
+  isWarning: boolean;
+}
 
 export const AdminPanel: React.FC = () => {
   const { 
@@ -62,6 +79,10 @@ export const AdminPanel: React.FC = () => {
   const [approvingWithdrawalId, setApprovingWithdrawalId] = useState<string | null>(null);
   const [withdrawalAlert, setWithdrawalAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Custom action prompt state for admin custom message/warning
+  const [actionPrompt, setActionPrompt] = useState<ActionPromptState | null>(null);
+  const [actionSubmitting, setActionSubmitting] = useState<boolean>(false);
+
   // Selected receipt image modal
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [selectedReceiptData, setSelectedReceiptData] = useState<{
@@ -77,6 +98,7 @@ export const AdminPanel: React.FC = () => {
     accountNumber?: string;
     code?: string;
     date: string;
+    adminNote?: string;
   } | null>(null);
 
   // User Management & Override Balance state
@@ -283,18 +305,19 @@ export const AdminPanel: React.FC = () => {
     }
   }, [withdrawalRequests]);
 
-  const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected', force = false) => {
+  const handleUpdateWithdrawalStatus = async (id: string, newStatus: 'approved' | 'rejected', force = false, customNote?: string) => {
     try {
       if (newStatus === 'approved') {
         setApprovingWithdrawalId(id);
         setWithdrawalAlert(null);
 
-        const result = await approveWithdrawalRequest(id, force);
+        const result = await approveWithdrawalRequest(id, force, customNote);
         setApprovingWithdrawalId(null);
 
         if (result.success) {
+          const finalNote = customNote || 'Disbursed to PalmPay Account on Site B successfully with zero error';
           setWithdrawals((prev) =>
-            prev.map((w) => (w.id === id ? { ...w, status: 'successful', adminNote: 'Disbursed to PalmPay Account' } : w))
+            prev.map((w) => (w.id === id ? { ...w, status: 'successful', adminNote: finalNote } : w))
           );
           setWithdrawalAlert({
             type: 'success',
@@ -313,9 +336,10 @@ export const AdminPanel: React.FC = () => {
           });
         }
       } else {
-        await rejectWithdrawalRequest(id, 'Declined by Admin. Funds reversed.');
+        const finalNote = customNote || 'Declined by Admin. Funds reversed.';
+        await rejectWithdrawalRequest(id, finalNote);
         setWithdrawals((prev) =>
-          prev.map((w) => (w.id === id ? { ...w, status: 'rejected', adminNote: 'Declined by Admin. Funds reversed.' } : w))
+          prev.map((w) => (w.id === id ? { ...w, status: 'rejected', adminNote: finalNote } : w))
         );
         setWithdrawalAlert({
           type: 'success',
@@ -331,17 +355,64 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const handleUpdateCodeStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
+  const handleUpdateCodeStatus = async (id: string, newStatus: 'approved' | 'rejected', customNote?: string) => {
     setCodes((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+      prev.map((c) => (c.id === id ? { ...c, status: newStatus, adminNote: customNote } : c))
     );
 
     try {
-      await updateDoc(doc(db, 'code_orders', id), {
-        status: newStatus
-      });
+      if (newStatus === 'approved') {
+        await approveCodeOrder(id, undefined, customNote);
+      } else {
+        await rejectCodeOrder(id, customNote || 'Order rejected by Admin.');
+      }
     } catch (err) {
       console.warn('Update code Firestore error:', err);
+    }
+  };
+
+  const handleConfirmActionPrompt = async () => {
+    if (!actionPrompt) return;
+    setActionSubmitting(true);
+    try {
+      const rawMsg = actionPrompt.customMessage.trim();
+      const finalNote = actionPrompt.isWarning && !rawMsg.startsWith('⚠️')
+        ? `⚠️ [WARNING] ${rawMsg}`
+        : rawMsg;
+
+      if (actionPrompt.type === 'approve_withdrawal') {
+        await handleUpdateWithdrawalStatus(actionPrompt.id, 'approved', false, finalNote);
+      } else if (actionPrompt.type === 'reject_withdrawal') {
+        await handleUpdateWithdrawalStatus(actionPrompt.id, 'rejected', false, finalNote);
+      } else if (actionPrompt.type === 'approve_deposit') {
+        await approveDepositRequest(actionPrompt.id, finalNote);
+        triggerCelebration({
+          title: 'Deposit Approved & Credited! 💳',
+          subtitle: `₦${(actionPrompt.amount || 0).toLocaleString()} credited to ${actionPrompt.userName}'s Deposited Balance.`,
+          type: 'deposit',
+          amount: `₦${(actionPrompt.amount || 0).toLocaleString()}`,
+          duration: 3800
+        });
+      } else if (actionPrompt.type === 'reject_deposit') {
+        await rejectDepositRequest(actionPrompt.id, finalNote);
+      } else if (actionPrompt.type === 'approve_code') {
+        await approveCodeOrder(actionPrompt.id, actionPrompt.code, finalNote);
+        triggerCelebration({
+          title: 'CashBack Code Approved! 🔑',
+          subtitle: `Code order for ${actionPrompt.userEmail} approved and activated.`,
+          type: 'code',
+          duration: 3500
+        });
+      } else if (actionPrompt.type === 'reject_code') {
+        await rejectCodeOrder(actionPrompt.id, finalNote);
+      }
+
+      setActionPrompt(null);
+    } catch (err: any) {
+      console.error('Error confirming admin action:', err);
+      alert(err?.message || 'Error processing action.');
+    } finally {
+      setActionSubmitting(false);
     }
   };
 
@@ -661,6 +732,7 @@ export const AdminPanel: React.FC = () => {
                               userEmail: dep.userEmail,
                               userName: dep.userName,
                               receiptImage: dep.receiptImage,
+                              adminNote: dep.adminNote,
                               date: new Date(Number(dep.createdAt)).toLocaleString()
                             })}
                             className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white px-3 py-1.5 rounded-xl border border-white/20 transition-all font-semibold"
@@ -683,14 +755,17 @@ export const AdminPanel: React.FC = () => {
                     {dep.status === 'pending' && (
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={async () => {
-                            await approveDepositRequest(dep.id);
-                            triggerCelebration({
-                              title: 'Deposit Approved & Credited! 💳',
-                              subtitle: `₦${dep.amount.toLocaleString()} has been credited to ${dep.userName}'s Deposited Balance.`,
-                              type: 'deposit',
-                              amount: `₦${dep.amount.toLocaleString()}`,
-                              duration: 3800
+                          onClick={() => {
+                            setActionPrompt({
+                              isOpen: true,
+                              type: 'approve_deposit',
+                              id: dep.id,
+                              userName: dep.userName,
+                              userEmail: dep.userEmail,
+                              amount: dep.amount,
+                              reference: dep.paymentReference,
+                              customMessage: `Deposit of ₦${dep.amount.toLocaleString()} approved and credited to your Deposited Balance.`,
+                              isWarning: false
                             });
                           }}
                           className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
@@ -699,7 +774,19 @@ export const AdminPanel: React.FC = () => {
                           <span>Approve &amp; Credit</span>
                         </button>
                         <button
-                          onClick={() => rejectDepositRequest(dep.id, 'Payment unverified')}
+                          onClick={() => {
+                            setActionPrompt({
+                              isOpen: true,
+                              type: 'reject_deposit',
+                              id: dep.id,
+                              userName: dep.userName,
+                              userEmail: dep.userEmail,
+                              amount: dep.amount,
+                              reference: dep.paymentReference,
+                              customMessage: 'Transaction receipt unverified. Please upload clear proof of payment.',
+                              isWarning: true
+                            });
+                          }}
                           className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
                         >
                           <XCircle className="w-3.5 h-3.5" />
@@ -767,7 +854,7 @@ export const AdminPanel: React.FC = () => {
                               ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                               : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
                           }`}>
-                            {isSuccessful ? 'SUCCESSFUL (PALMPAY CREDITED)' : isFailed ? 'FAILED (INVALID PALMPAY ACCOUNT)' : req.status}
+                            {isSuccessful ? 'SUCCESSFUL (PALMPAY CREDITED)' : isFailed ? 'FAILED (RETRY DISBURSAL)' : req.status}
                           </span>
                           {req.balanceSource && (
                             <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
@@ -843,6 +930,7 @@ export const AdminPanel: React.FC = () => {
                               bankName: req.bankName,
                               accountNumber: req.accountNumber,
                               code: req.cashbackCode,
+                              adminNote: req.adminNote,
                               receiptImage: req.receiptImage || undefined,
                               date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
                             })}
@@ -856,7 +944,21 @@ export const AdminPanel: React.FC = () => {
                             <>
                               <button
                                 disabled={isApproving}
-                                onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved')}
+                                onClick={() => {
+                                  setActionPrompt({
+                                    isOpen: true,
+                                    type: 'approve_withdrawal',
+                                    id: req.id,
+                                    userName: req.userName,
+                                    userEmail: req.userEmail,
+                                    amount: req.amount,
+                                    accountNumber: req.accountNumber,
+                                    bankName: req.bankName,
+                                    reference: req.reference || req.id,
+                                    customMessage: `Disbursed ₦${req.amount.toLocaleString()} to PalmPay account ${req.accountNumber} on Site B with zero error.`,
+                                    isWarning: false
+                                  });
+                                }}
                                 className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] hover:opacity-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
                               >
                                 {isApproving ? (
@@ -873,7 +975,21 @@ export const AdminPanel: React.FC = () => {
                               </button>
                               <button
                                 disabled={isApproving}
-                                onClick={() => handleUpdateWithdrawalStatus(req.id, 'rejected')}
+                                onClick={() => {
+                                  setActionPrompt({
+                                    isOpen: true,
+                                    type: 'reject_withdrawal',
+                                    id: req.id,
+                                    userName: req.userName,
+                                    userEmail: req.userEmail,
+                                    amount: req.amount,
+                                    accountNumber: req.accountNumber,
+                                    bankName: req.bankName,
+                                    reference: req.reference || req.id,
+                                    customMessage: 'Declined by Admin: Account verification mismatch. Funds have been reversed back to your balance.',
+                                    isWarning: true
+                                  });
+                                }}
                                 className="px-3 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 whitespace-nowrap"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
@@ -885,7 +1001,21 @@ export const AdminPanel: React.FC = () => {
                           {(req.status === 'successful' || req.status === 'approved') && (
                             <button
                               disabled={isApproving}
-                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                              onClick={() => {
+                                setActionPrompt({
+                                  isOpen: true,
+                                  type: 'approve_withdrawal',
+                                  id: req.id,
+                                  userName: req.userName,
+                                  userEmail: req.userEmail,
+                                  amount: req.amount,
+                                  accountNumber: req.accountNumber,
+                                  bankName: req.bankName,
+                                  reference: req.reference || req.id,
+                                  customMessage: `Re-sent ₦${req.amount.toLocaleString()} disbursal to PalmPay account ${req.accountNumber} with zero error.`,
+                                  isWarning: false
+                                });
+                              }}
                               className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
                               title="Force re-send disbursal of exact amount to PalmPay Account"
                             >
@@ -906,7 +1036,21 @@ export const AdminPanel: React.FC = () => {
                           {req.status === 'failed' && (
                             <button
                               disabled={isApproving}
-                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                              onClick={() => {
+                                setActionPrompt({
+                                  isOpen: true,
+                                  type: 'approve_withdrawal',
+                                  id: req.id,
+                                  userName: req.userName,
+                                  userEmail: req.userEmail,
+                                  amount: req.amount,
+                                  accountNumber: req.accountNumber,
+                                  bankName: req.bankName,
+                                  reference: req.reference || req.id,
+                                  customMessage: `Retried disbursal of ₦${req.amount.toLocaleString()} to PalmPay account ${req.accountNumber} successfully with zero error.`,
+                                  isWarning: false
+                                });
+                              }}
                               className="px-3 py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
                               title="Retry disbursing exact amount to PalmPay Account"
                             >
@@ -986,6 +1130,7 @@ export const AdminPanel: React.FC = () => {
                           userEmail: c.userEmail,
                           code: c.generatedCode,
                           receiptImage: c.receiptImage,
+                          adminNote: c.adminNote,
                           date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
                         })}
                         className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-[10px] sm:text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors whitespace-nowrap"
@@ -997,13 +1142,18 @@ export const AdminPanel: React.FC = () => {
                       {c.status === 'pending' && (
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={async () => {
-                              await approveCodeOrder(c.id);
-                              triggerCelebration({
-                                title: 'CashBack Code Approved! 🔑',
-                                subtitle: `Code order for ${c.userEmail} approved and code activated.`,
-                                type: 'code',
-                                duration: 3500
+                            onClick={() => {
+                              setActionPrompt({
+                                isOpen: true,
+                                type: 'approve_code',
+                                id: c.id,
+                                userName: c.userEmail.split('@')[0],
+                                userEmail: c.userEmail,
+                                amount: c.codePrice || 8550,
+                                code: c.generatedCode,
+                                reference: c.paymentReference,
+                                customMessage: 'CashBack Code approved and activated. Your code is now active for withdrawals.',
+                                isWarning: false
                               });
                             }}
                             className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] sm:text-xs shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
@@ -1013,7 +1163,19 @@ export const AdminPanel: React.FC = () => {
                           </button>
 
                           <button
-                            onClick={() => rejectCodeOrder(c.id, 'Unverified payment')}
+                            onClick={() => {
+                              setActionPrompt({
+                                isOpen: true,
+                                type: 'reject_code',
+                                id: c.id,
+                                userName: c.userEmail.split('@')[0],
+                                userEmail: c.userEmail,
+                                amount: c.codePrice || 8550,
+                                reference: c.paymentReference,
+                                customMessage: 'Payment unverified. CashBack Code order declined.',
+                                isWarning: true
+                              });
+                            }}
                             className="px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-[10px] sm:text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
                           >
                             <XCircle className="w-3.5 h-3.5" />
@@ -1742,6 +1904,18 @@ export const AdminPanel: React.FC = () => {
                 </div>
               )}
 
+              {selectedReceiptData.adminNote && (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Admin Review Note / Custom Warning:</span>
+                  </div>
+                  <p className="text-slate-200 text-xs italic leading-relaxed break-words">
+                    "{selectedReceiptData.adminNote}"
+                  </p>
+                </div>
+              )}
+
               {selectedReceiptData.receiptImage && (
                 <div className="pt-2">
                   <span className="text-slate-400 block mb-1.5 font-semibold">Submitted Transaction Receipt:</span>
@@ -1761,6 +1935,197 @@ export const AdminPanel: React.FC = () => {
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white font-bold text-xs shadow-md hover:opacity-95 transition-all"
               >
                 Close Receipt Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Action & Custom Warning/Message Modal */}
+      {actionPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-6 border border-purple-500/40 shadow-2xl relative space-y-4 max-h-[95vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2.5 rounded-2xl ${
+                  actionPrompt.type.startsWith('approve') 
+                    ? 'bg-emerald-500/20 text-[#00B875] border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                }`}>
+                  {actionPrompt.type.startsWith('approve') ? (
+                    <CheckCircle2 className="w-5 h-5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins',sans-serif]">
+                    {actionPrompt.type === 'approve_withdrawal' && 'Approve Withdrawal & Disburse'}
+                    {actionPrompt.type === 'reject_withdrawal' && 'Decline Withdrawal Request'}
+                    {actionPrompt.type === 'approve_deposit' && 'Approve & Credit Deposit'}
+                    {actionPrompt.type === 'reject_deposit' && 'Reject Deposit Request'}
+                    {actionPrompt.type === 'approve_code' && 'Approve CashBack Code Order'}
+                    {actionPrompt.type === 'reject_code' && 'Decline CashBack Code Order'}
+                  </h3>
+                  <span className="text-xs text-slate-400 font-mono">
+                    User: {actionPrompt.userName} ({actionPrompt.userEmail})
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActionPrompt(null)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Request Summary */}
+            <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 text-xs space-y-1.5 font-mono">
+              {actionPrompt.amount !== undefined && (
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>Amount:</span>
+                  <strong className="text-white font-bold text-sm">₦{actionPrompt.amount.toLocaleString()}</strong>
+                </div>
+              )}
+              {actionPrompt.accountNumber && (
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>PalmPay Account:</span>
+                  <span className="text-[#FFC107] font-bold">{actionPrompt.accountNumber}</span>
+                </div>
+              )}
+              {actionPrompt.reference && (
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>Reference:</span>
+                  <span className="text-purple-300">{actionPrompt.reference}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Presets List */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#FFC107]" />
+                <span>Quick Preset Messages &amp; Warnings:</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {(actionPrompt.type === 'approve_withdrawal' ? [
+                  { text: `Disbursed ₦${(actionPrompt.amount || 0).toLocaleString()} to PalmPay account ${actionPrompt.accountNumber || ''} on Site B with zero error.`, isWarning: false },
+                  { text: 'Payment approved. Funds sent directly to your PalmPay wallet balance.', isWarning: false },
+                  { text: 'Withdrawal completed. Transaction reference linked to your PalmPay account.', isWarning: false },
+                  { text: '⚠️ Warning: Recipient name differs slightly from PalmPay record. Verified & approved.', isWarning: true }
+                ] : actionPrompt.type === 'reject_withdrawal' ? [
+                  { text: 'Declined by Admin: PalmPay account number mismatch. Funds reversed back to your balance.', isWarning: true },
+                  { text: 'Declined by Admin: Unverified destination account. Funds returned safely to your wallet.', isWarning: true },
+                  { text: '⚠️ Warning: Invalid account number supplied. Please re-check your 10-digit PalmPay number.', isWarning: true },
+                  { text: 'Declined by Admin: Daily maximum limit reached. Funds reversed back to balance.', isWarning: true }
+                ] : actionPrompt.type === 'approve_deposit' ? [
+                  { text: `Deposit of ₦${(actionPrompt.amount || 0).toLocaleString()} approved and credited to your Deposited Balance.`, isWarning: false },
+                  { text: 'Payment confirmed! Ready for code purchases and cashback games.', isWarning: false },
+                  { text: '⚠️ Warning: Deposit receipt was partly cropped. Approved, but upload clear receipts next time.', isWarning: true }
+                ] : actionPrompt.type === 'reject_deposit' ? [
+                  { text: 'Transaction receipt unverified. Please upload clear, unaltered proof of payment.', isWarning: true },
+                  { text: 'Payment reference could not be matched on bank records. Deposit declined.', isWarning: true },
+                  { text: '⚠️ Warning: Duplicate or invalid payment receipt detected. Request declined.', isWarning: true }
+                ] : actionPrompt.type === 'approve_code' ? [
+                  { text: 'CashBack Code approved and activated. Your code is now active for withdrawals.', isWarning: false },
+                  { text: 'Payment confirmed. CashBack Code successfully generated and unlocked in account.', isWarning: false }
+                ] : [
+                  { text: 'Payment unverified. CashBack Code order declined.', isWarning: true },
+                  { text: '⚠️ Warning: Payment reference invalid. Please purchase through verified payment link.', isWarning: true }
+                ]).map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setActionPrompt((prev) => prev ? {
+                        ...prev,
+                        customMessage: preset.text,
+                        isWarning: preset.isWarning
+                      } : null);
+                    }}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg text-left transition-all border ${
+                      actionPrompt.customMessage === preset.text
+                        ? 'bg-purple-600/40 border-purple-400 text-white font-bold'
+                        : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+                    }`}
+                  >
+                    {preset.text.length > 55 ? preset.text.slice(0, 52) + '...' : preset.text}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Editable Custom Message / Warning Textarea */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-white flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Custom Warning or Message for User:</span>
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">Visible on User Receipt &amp; Alerts</span>
+              </div>
+              <textarea
+                rows={3}
+                value={actionPrompt.customMessage}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setActionPrompt((prev) => prev ? { ...prev, customMessage: val } : null);
+                }}
+                placeholder="Enter custom warning or message for the user..."
+                className="w-full bg-[#121922] text-white text-xs sm:text-sm rounded-xl p-3 border border-white/15 focus:outline-none focus:border-purple-500 transition-colors resize-none placeholder-slate-500"
+              />
+            </div>
+
+            {/* Warning Notice Flag Toggle */}
+            <label className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 cursor-pointer text-xs text-amber-200">
+              <input
+                type="checkbox"
+                checked={actionPrompt.isWarning}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setActionPrompt((prev) => prev ? { ...prev, isWarning: checked } : null);
+                }}
+                className="w-4 h-4 rounded text-amber-500 accent-amber-500 cursor-pointer"
+              />
+              <span className="font-semibold">Highlight as Alert / Warning Notice (amber badge) ⚠️</span>
+            </label>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={actionSubmitting}
+                onClick={() => setActionPrompt(null)}
+                className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionSubmitting}
+                onClick={handleConfirmActionPrompt}
+                className={`flex-1 py-3 rounded-2xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 ${
+                  actionPrompt.type.startsWith('approve')
+                    ? 'bg-gradient-to-r from-emerald-600 via-[#00B875] to-emerald-500 text-white'
+                    : 'bg-gradient-to-r from-rose-600 via-red-600 to-rose-700 text-white'
+                }`}
+              >
+                {actionSubmitting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {actionPrompt.type.startsWith('approve') ? 'Confirm Approval & Send' : 'Confirm Decline & Send'}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>

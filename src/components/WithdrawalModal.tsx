@@ -64,16 +64,13 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   // Initial user default check
   useEffect(() => {
     if (isOpen) {
-      if (user?.phone && !accountNumber) {
-        const cleanedPhone = user.phone.replace(/\D/g, '');
-        if (cleanedPhone.length >= 10) {
-          const tenDigit = cleanedPhone.slice(-10);
-          setAccountNumber(tenDigit);
-          handleAutoResolve(tenDigit);
-        }
+      const defaultAcc = user?.accountNumber || (user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : '');
+      if (defaultAcc && !accountNumber) {
+        setAccountNumber(defaultAcc);
+        handleAutoResolve(defaultAcc);
       }
     }
-  }, [isOpen, user?.phone]);
+  }, [isOpen, user?.accountNumber, user?.phone]);
 
   // Automatic Paystack Name Resolution function
   const handleAutoResolve = async (num: string) => {

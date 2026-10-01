@@ -5,6 +5,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   phone?: string;
+  accountNumber?: string;
   photoURL?: string;
   balance: number; // Cashback balance (Withdrawable only)
   depositBalance: number; // Deposited balance (For Games & Code Purchases)

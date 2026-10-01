@@ -18,13 +18,14 @@ interface LedgerItem {
   reference?: string;
   email?: string;
   balanceSource?: 'cashback' | 'deposit';
+  adminNote?: string;
 }
 
 export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
   isFullPage = false,
   onViewAll
 }) => {
-  const { transactions, depositRequests, withdrawalRequests } = useAuth();
+  const { user, transactions, depositRequests, withdrawalRequests } = useAuth();
   const [filterType, setFilterType] = useState<'all' | 'credit' | 'debit'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTx, setSelectedTx] = useState<LedgerItem | null>(null);
@@ -44,12 +45,23 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
     return String(ts);
   };
 
+  // Strictly isolate items for the logged in user to prevent combination and mismatch
+  const userDeposits = (depositRequests || []).filter(
+    (dep) => !user || user.role === 'admin' || dep.uid === user.uid || (dep.userEmail && dep.userEmail.toLowerCase() === user.email.toLowerCase())
+  );
+  const userWithdrawals = (withdrawalRequests || []).filter(
+    (wd) => !user || user.role === 'admin' || wd.uid === user.uid || (wd.userEmail && wd.userEmail.toLowerCase() === user.email.toLowerCase())
+  );
+  const userTransactions = (transactions || []).filter(
+    (tx) => !user || user.role === 'admin' || tx.uid === user.uid || (tx.email && tx.email.toLowerCase() === user.email.toLowerCase())
+  );
+
   // Combine completed transactions with pending deposit and withdrawal requests
   const allLedgerItems: LedgerItem[] = [];
-  const txReferences = new Set(transactions.map((t) => t.reference));
+  const txReferences = new Set(userTransactions.map((t) => t.reference));
 
   // 1. Add deposit requests (filtering out completed ones if already in transactions list)
-  (depositRequests || []).forEach((dep) => {
+  userDeposits.forEach((dep) => {
     if (!txReferences.has(dep.paymentReference)) {
       allLedgerItems.push({
         id: dep.id,
@@ -61,13 +73,14 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
         status: dep.status === 'approved' ? 'completed' : (dep.status as any),
         reference: dep.paymentReference || dep.id,
         email: dep.userEmail,
-        balanceSource: 'deposit'
+        balanceSource: 'deposit',
+        adminNote: dep.adminNote
       });
     }
   });
 
   // 2. Add withdrawal requests (only if not already tracked in transactions)
-  (withdrawalRequests || []).forEach((wd) => {
+  userWithdrawals.forEach((wd) => {
     if (!txReferences.has(wd.reference)) {
       allLedgerItems.push({
         id: wd.id,
@@ -79,17 +92,18 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
         status: (wd.status === 'approved' || wd.status === 'successful') ? 'completed' : (wd.status === 'failed' || wd.status === 'rejected') ? 'rejected' : (wd.status as any),
         reference: wd.reference || wd.id,
         email: wd.userEmail,
-        balanceSource: wd.balanceSource || 'cashback'
+        balanceSource: wd.balanceSource || 'cashback',
+        adminNote: wd.adminNote
       });
     }
   });
 
   // 3. Add regular transactions (resolving latest approval status from requests)
-  (transactions || []).forEach((tx) => {
-    const matchingWd = (withdrawalRequests || []).find(
+  userTransactions.forEach((tx) => {
+    const matchingWd = userWithdrawals.find(
       (w) => w.reference === tx.reference || w.id === tx.id || `WD-${w.id}` === tx.reference || `WD-${w.reference}` === tx.reference
     );
-    const matchingDep = (depositRequests || []).find(
+    const matchingDep = userDeposits.find(
       (d) => d.paymentReference === tx.reference || d.id === tx.id
     );
 
@@ -127,7 +141,8 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
       status: resolvedStatus,
       reference: tx.reference,
       email: tx.email,
-      balanceSource: tx.balanceSource
+      balanceSource: tx.balanceSource,
+      adminNote: matchingWd?.adminNote || matchingDep?.adminNote
     });
   });
 
@@ -457,6 +472,17 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
                 <span>Reference ID:</span>
                 <span className="font-mono text-amber-400 font-bold">{selectedTx.reference || 'REF-PENDING'}</span>
               </div>
+              {selectedTx.adminNote && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span>Admin Message / Warning</span>
+                  </div>
+                  <p className="text-slate-200 text-[11px] leading-relaxed break-words">
+                    "{selectedTx.adminNote}"
+                  </p>
+                </div>
+              )}
               <div className="pt-2 border-t border-white/10 text-[11px] text-purple-200/80 leading-relaxed">
                 ℹ️ Deposits and withdrawals require Admin approval on the Control Panel before balance updates and disbursements complete.
               </div>
