@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift } from 'lucide-react';
+import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 
@@ -18,6 +18,7 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   const { triggerCelebration } = useCelebration();
   const [copiedCode, setCopiedCode] = useState(false);
   const [isUltraDarkMode, setIsUltraDarkMode] = useState(true);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   if (!isOpen) return null;
 
@@ -41,8 +42,15 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   };
 
   const handleLogout = async () => {
-    await logout();
-    onClose();
+    try {
+      setLogoutLoading(true);
+      await logout();
+      onClose();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   const formatMaskedEmail = (emailStr: string) => {
@@ -293,10 +301,20 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
         <div className="mt-6 pt-4 border-t border-white/10 flex flex-col gap-2">
           <button
             onClick={handleLogout}
-            className="w-full py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white font-bold text-xs sm:text-sm shadow-[0_6px_20px_rgba(220,38,38,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-red-400/30"
+            disabled={logoutLoading}
+            className="w-full py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white font-bold text-xs sm:text-sm shadow-[0_6px_20px_rgba(220,38,38,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 border border-red-400/30 disabled:opacity-50 cursor-pointer"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
+            {logoutLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                <span>Signing Out...</span>
+              </>
+            ) : (
+              <>
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </>
+            )}
           </button>
         </div>
 

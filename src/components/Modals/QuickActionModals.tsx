@@ -15,7 +15,8 @@ import {
   CreditCard,
   Building,
   HelpCircle,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth, PAYSTACK_DEPOSIT_URL } from '../../context/AuthContext';
 import { useCelebration } from '../../context/CelebrationContext';
@@ -406,10 +407,19 @@ export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
                 <button
                   type="submit"
                   disabled={submitting || !receiptImage}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-sm shadow-[0_6px_25px_rgba(0,184,117,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-sm shadow-[0_6px_25px_rgba(0,184,117,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{submitting ? 'Submitting Receipt...' : 'Submit Deposit for Admin Approval'}</span>
+                  {submitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#FFC107]" />
+                      <span>Submitting Receipt for Admin Review...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Submit Deposit for Admin Approval</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

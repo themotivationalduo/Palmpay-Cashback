@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award } from 'lucide-react';
+import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 
@@ -125,10 +125,19 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
               <button
                 onClick={handleClaimWelcome}
                 disabled={claimingSignup}
-                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white text-xs font-bold shadow-[0_4px_16px_rgba(126,29,198,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-purple-300/30"
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white text-xs font-bold shadow-[0_4px_16px_rgba(126,29,198,0.4)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-1.5 border border-purple-300/30 disabled:opacity-50 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-[#FFC107]" />
-                <span>{claimingSignup ? 'Claiming...' : 'Claim ₦150,000 Bonus'}</span>
+                {claimingSignup ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#FFC107]" />
+                    <span>Claiming Grant...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-[#FFC107]" />
+                    <span>Claim ₦150,000 Bonus</span>
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -169,11 +178,20 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
               className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm ${
                 isDailyClaimed
                   ? 'bg-white/10 text-slate-400 cursor-not-allowed border border-white/5'
-                  : 'bg-gradient-to-r from-amber-500 to-[#FFC107] text-black hover:opacity-95 active:scale-95 shadow-amber-500/20'
+                  : 'bg-gradient-to-r from-amber-500 to-[#FFC107] text-black hover:opacity-95 active:scale-95 shadow-amber-500/20 cursor-pointer disabled:opacity-50'
               }`}
             >
-              <CalendarCheck className="w-4 h-4" />
-              <span>{isDailyClaimed ? 'Claimed (Next at 00:00)' : 'Claim ₦2,500 Today'}</span>
+              {claimingDaily ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                  <span>Claiming Reward...</span>
+                </>
+              ) : (
+                <>
+                  <CalendarCheck className="w-4 h-4" />
+                  <span>{isDailyClaimed ? 'Claimed (Next at 00:00)' : 'Claim ₦2,500 Today'}</span>
+                </>
+              )}
             </button>
           </div>
         </div>

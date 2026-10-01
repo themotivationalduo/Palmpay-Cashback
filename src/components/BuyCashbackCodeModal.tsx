@@ -12,7 +12,8 @@ import {
   Lock,
   Upload,
   Image as ImageIcon,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth, PAYSTACK_CASHBACK_CODE_URL } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -342,17 +343,22 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
             type="button"
             onClick={handleBuyWithDepositBalance}
             disabled={hasPurchasedCode || depLoading || depositBal < 8550}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(0,184,117,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white font-bold text-xs sm:text-sm shadow-[0_4px_20px_rgba(0,184,117,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
             {hasPurchasedCode ? (
               <>
                 <Lock className="w-4 h-4" />
                 <span>Code Already Purchased &amp; Active</span>
               </>
+            ) : depLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-[#FFC107]" />
+                <span>Submitting Code Order for Approval...</span>
+              </>
             ) : (
               <>
                 <Coins className="w-4 h-4" />
-                <span>{depLoading ? 'Purchasing...' : 'Buy with Deposited Balance (₦8,550)'}</span>
+                <span>Buy with Deposited Balance (₦8,550)</span>
               </>
             )}
           </button>
@@ -463,10 +469,19 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
                 <button
                   type="submit"
                   disabled={paystackLoading || !receiptImage}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xs sm:text-sm hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xs sm:text-sm hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{paystackLoading ? 'Submitting Receipt...' : 'Step 3: Submit Receipt for Code Release'}</span>
+                  {paystackLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#FFC107]" />
+                      <span>Submitting Receipt for Admin Review...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Step 3: Submit Receipt for Code Release</span>
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -488,19 +503,23 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
             <div className="flex gap-2">
               <input
                 type="text"
+                disabled={loading}
                 value={inputCode}
                 onChange={(e) => setInputCode(e.target.value)}
                 placeholder="Enter purchased code"
-                className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6]"
+                className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] disabled:opacity-50"
                 required
               />
               <button
                 type="submit"
                 disabled={loading || !inputCode.trim()}
-                className="px-4 py-3 rounded-xl bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md border border-purple-300/30"
+                className="px-4 py-3 rounded-xl bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white font-bold text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shadow-md border border-purple-300/30 cursor-pointer"
               >
                 {loading ? (
-                  <span>Verifying...</span>
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#FFC107]" />
+                    <span>Verifying...</span>
+                  </>
                 ) : (
                   <>
                     <Check className="w-3.5 h-3.5" />
