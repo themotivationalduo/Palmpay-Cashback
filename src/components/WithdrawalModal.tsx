@@ -200,17 +200,17 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
     const cleanCode = (enteredCode || '').trim().toLowerCase();
     if (!cleanCode) {
-      setError('CashBack Code required. Please input your verified CashBack Code.');
+      setError('CashBack Code required. Please input your verified CashBack Code or purchase one from the dashboard.');
       return;
     }
 
     if (!user?.hasActiveCode || !user?.activeCashbackCode) {
-      setError('Your account does not have an active CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.');
+      setError('Your account does not have an active CashBack Code. Please purchase a CashBack Code first from the dashboard / buy modal and wait for Admin approval before attempting to withdraw.');
       return;
     }
 
     if (cleanCode !== user.activeCashbackCode.toLowerCase()) {
-      setError('Invalid CashBack Code. The code you entered is invalid or does not match the authorized code assigned to your account. Please verify your purchased code and try again.');
+      setError('Invalid CashBack Code. The code you entered is incorrect. Please verify and insert your correct authorized CashBack Code, or proceed to purchase a new unique code if you do not have one.');
       return;
     }
 

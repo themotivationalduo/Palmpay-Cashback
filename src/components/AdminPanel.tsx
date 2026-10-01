@@ -595,121 +595,123 @@ export const AdminPanel: React.FC = () => {
 
       {/* TAB 0: Deposit Approvals (Receipt Review) */}
       {tab === 'deposits' && (
-        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
-          {filteredDeposits.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              No deposit requests found for status: <strong>{filterStatus}</strong>.
-            </div>
-          ) : (
-            filteredDeposits.map((dep) => (
-              <div key={dep.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm sm:text-base text-white">{dep.userName}</span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                      dep.status === 'approved'
-                        ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
-                        : dep.status === 'rejected'
-                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                        : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
-                    }`}>
-                      {dep.status}
-                    </span>
-                  </div>
+        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+          <div className="min-w-[950px] divide-y divide-white/5">
+            {filteredDeposits.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                No deposit requests found for status: <strong>{filterStatus}</strong>.
+              </div>
+            ) : (
+              filteredDeposits.map((dep) => (
+                <div key={dep.id} className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm sm:text-base text-white">{dep.userName}</span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        dep.status === 'approved'
+                          ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                          : dep.status === 'rejected'
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                          : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                      }`}>
+                        {dep.status}
+                      </span>
+                    </div>
 
-                  <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span>Email: <strong className="text-white font-mono">{dep.userEmail}</strong></span>
-                    <span>•</span>
-                    <span>Ref: <strong className="text-[#FFC107] font-mono">{dep.paymentReference || dep.id}</strong></span>
-                    <span>•</span>
-                    <span>Date: <span className="text-slate-400">{new Date(Number(dep.createdAt)).toLocaleString()}</span></span>
-                  </div>
+                    <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span>Email: <strong className="text-white font-mono">{dep.userEmail}</strong></span>
+                      <span>•</span>
+                      <span>Ref: <strong className="text-[#FFC107] font-mono">{dep.paymentReference || dep.id}</strong></span>
+                      <span>•</span>
+                      <span>Date: <span className="text-slate-400">{new Date(Number(dep.createdAt)).toLocaleString()}</span></span>
+                    </div>
 
-                  {/* Receipt Image Thumbnail & Button */}
-                  {dep.receiptImage && (
-                    <div className="pt-2 flex items-center gap-3">
-                      <div
-                        onClick={() => setPreviewImage(dep.receiptImage)}
-                        className="w-12 h-12 rounded-xl overflow-hidden border border-purple-500/40 bg-black cursor-pointer hover:opacity-80 transition-opacity shadow-sm relative group shrink-0"
-                        title="Click to inspect full receipt image"
-                      >
-                        <img src={dep.receiptImage} alt="Deposit Receipt Thumbnail" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                          <Eye className="w-4 h-4" />
+                    {/* Receipt Image Thumbnail & Button */}
+                    {dep.receiptImage && (
+                      <div className="pt-2 flex items-center gap-3">
+                        <div
+                          onClick={() => setPreviewImage(dep.receiptImage)}
+                          className="w-12 h-12 rounded-xl overflow-hidden border border-purple-500/40 bg-black cursor-pointer hover:opacity-80 transition-opacity shadow-sm relative group shrink-0"
+                          title="Click to inspect full receipt image"
+                        >
+                          <img src={dep.receiptImage} alt="Deposit Receipt Thumbnail" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(dep.receiptImage)}
+                            className="inline-flex items-center gap-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-3 py-1.5 rounded-xl border border-purple-500/30 transition-all font-semibold shadow-inner"
+                          >
+                            <Eye className="w-4 h-4 text-[#FFC107]" />
+                            <span>Inspect Receipt Image</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReceiptData({
+                              type: 'deposit',
+                              title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
+                              amount: dep.amount,
+                              status: dep.status,
+                              reference: dep.paymentReference || dep.id,
+                              userEmail: dep.userEmail,
+                              userName: dep.userName,
+                              receiptImage: dep.receiptImage,
+                              date: new Date(Number(dep.createdAt)).toLocaleString()
+                            })}
+                            className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white px-3 py-1.5 rounded-xl border border-white/20 transition-all font-semibold"
+                          >
+                            <span>View Full Receipt</span>
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewImage(dep.receiptImage)}
-                          className="inline-flex items-center gap-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-3 py-1.5 rounded-xl border border-purple-500/30 transition-all font-semibold shadow-inner"
-                        >
-                          <Eye className="w-4 h-4 text-[#FFC107]" />
-                          <span>Inspect Receipt Image</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setSelectedReceiptData({
-                            type: 'deposit',
-                            title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
-                            amount: dep.amount,
-                            status: dep.status,
-                            reference: dep.paymentReference || dep.id,
-                            userEmail: dep.userEmail,
-                            userName: dep.userName,
-                            receiptImage: dep.receiptImage,
-                            date: new Date(Number(dep.createdAt)).toLocaleString()
-                          })}
-                          className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white px-3 py-1.5 rounded-xl border border-white/20 transition-all font-semibold"
-                        >
-                          <span>View Full Receipt</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between lg:justify-end gap-4 shrink-0">
-                  <div className="text-right">
-                    <div className="text-lg font-black text-[#00B875] font-mono">
-                      ₦{dep.amount.toLocaleString()}
-                    </div>
-                    <span className="text-[10px] text-slate-400">Deposited Amount</span>
+                    )}
                   </div>
 
-                  {dep.status === 'pending' && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={async () => {
-                          await approveDepositRequest(dep.id);
-                          triggerCelebration({
-                            title: 'Deposit Approved & Credited! 💳',
-                            subtitle: `₦${dep.amount.toLocaleString()} has been credited to ${dep.userName}'s Deposited Balance.`,
-                            type: 'deposit',
-                            amount: `₦${dep.amount.toLocaleString()}`,
-                            duration: 3800
-                          });
-                        }}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Approve &amp; Credit</span>
-                      </button>
-                      <button
-                        onClick={() => rejectDepositRequest(dep.id, 'Payment unverified')}
-                        className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject</span>
-                      </button>
+                  <div className="flex items-center justify-end gap-4 shrink-0">
+                    <div className="text-right">
+                      <div className="text-lg font-black text-[#00B875] font-mono">
+                        ₦{dep.amount.toLocaleString()}
+                      </div>
+                      <span className="text-[10px] text-slate-400">Deposited Amount</span>
                     </div>
-                  )}
+
+                    {dep.status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            await approveDepositRequest(dep.id);
+                            triggerCelebration({
+                              title: 'Deposit Approved & Credited! 💳',
+                              subtitle: `₦${dep.amount.toLocaleString()} has been credited to ${dep.userName}'s Deposited Balance.`,
+                              type: 'deposit',
+                              amount: `₦${dep.amount.toLocaleString()}`,
+                              duration: 3800
+                            });
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Approve &amp; Credit</span>
+                        </button>
+                        <button
+                          onClick={() => rejectDepositRequest(dep.id, 'Payment unverified')}
+                          className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Reject</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
 
@@ -740,192 +742,194 @@ export const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
-            {filteredWithdrawals.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                No withdrawal requests found for this filter.
-              </div>
-            ) : (
-              filteredWithdrawals.map((req) => {
-                const isApproving = approvingWithdrawalId === req.id;
-                const isSuccessful = req.status === 'successful' || req.status === 'approved';
-                const isFailed = req.status === 'failed';
-                const isRejected = req.status === 'rejected';
+          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+            <div className="min-w-[1100px] divide-y divide-white/5">
+              {filteredWithdrawals.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  No withdrawal requests found for this filter.
+                </div>
+              ) : (
+                filteredWithdrawals.map((req) => {
+                  const isApproving = approvingWithdrawalId === req.id;
+                  const isSuccessful = req.status === 'successful' || req.status === 'approved';
+                  const isFailed = req.status === 'failed';
+                  const isRejected = req.status === 'rejected';
 
-                return (
-                  <div key={req.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-bold text-sm sm:text-base text-white">{req.userName}</span>
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                          isSuccessful
-                            ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
-                            : isFailed || isRejected
-                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                            : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
-                        }`}>
-                          {isSuccessful ? 'SUCCESSFUL (PALMPAY CREDITED)' : isFailed ? 'FAILED (INVALID PALMPAY ACCOUNT)' : req.status}
-                        </span>
-                        {req.balanceSource && (
-                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
-                            {req.balanceSource === 'deposit' ? 'Deposited Bal' : 'Cashback Bal'}
+                  return (
+                    <div key={req.id} className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-sm sm:text-base text-white">{req.userName}</span>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                            isSuccessful
+                              ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                              : isFailed || isRejected
+                              ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                              : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                          }`}>
+                            {isSuccessful ? 'SUCCESSFUL (PALMPAY CREDITED)' : isFailed ? 'FAILED (INVALID PALMPAY ACCOUNT)' : req.status}
                           </span>
+                          {req.balanceSource && (
+                            <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-400/30">
+                              {req.balanceSource === 'deposit' ? 'Deposited Bal' : 'Cashback Bal'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>Email: <strong className="text-white font-mono break-all">{req.userEmail}</strong></span>
+                          <span>•</span>
+                          <span className="inline-flex items-center gap-1">
+                            PalmPay Account: 
+                            <strong className="text-[#FFC107] font-mono break-all bg-black/40 px-2 py-0.5 rounded border border-amber-500/30">
+                              {req.accountNumber}
+                            </strong>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyAccount(req.accountNumber)}
+                              className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                              title="Copy Account Number"
+                            >
+                              {copiedAcc === req.accountNumber ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            </button>
+                          </span>
+                          <span>•</span>
+                          <span>Destination: <strong className="text-white">{req.bankName || 'PalmPay Wallet'}</strong></span>
+                        </div>
+
+                        {/* Attached Transaction Receipt Proof Indicator */}
+                        {req.receiptImage && (
+                          <div className="pt-1 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(req.receiptImage || null)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-[11px] text-emerald-300 transition-colors"
+                            >
+                              <img src={req.receiptImage} alt="Receipt thumbnail" className="w-4 h-4 rounded object-cover border border-emerald-400/40 shrink-0" />
+                              <span className="font-semibold">View Transaction Receipt</span>
+                              <Eye className="w-3 h-3 text-emerald-400 ml-0.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        {req.adminNote && (
+                          <p className="text-[11px] text-rose-300 bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-500/25 mt-1">
+                            ⚠️ {req.adminNote}
+                          </p>
                         )}
                       </div>
 
-                      <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span>Email: <strong className="text-white font-mono break-all">{req.userEmail}</strong></span>
-                        <span>•</span>
-                        <span className="inline-flex items-center gap-1">
-                          PalmPay Account: 
-                          <strong className="text-[#FFC107] font-mono break-all bg-black/40 px-2 py-0.5 rounded border border-amber-500/30">
-                            {req.accountNumber}
-                          </strong>
+                      <div className="flex items-center justify-end gap-4 shrink-0">
+                        <div className="text-right">
+                          <div className="text-lg font-black text-[#FFC107] font-mono">
+                            ₦{req.amount.toLocaleString()}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            Ref: {req.reference || req.id}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleCopyAccount(req.accountNumber)}
-                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
-                            title="Copy Account Number"
+                            onClick={() => setSelectedReceiptData({
+                              type: 'withdrawal',
+                              title: `PalmPay Account Withdrawal (${req.bankName || 'PalmPay Wallet'})`,
+                              amount: req.amount,
+                              status: req.status,
+                              reference: req.reference || req.id,
+                              userEmail: req.userEmail,
+                              userName: req.userName,
+                              bankName: req.bankName,
+                              accountNumber: req.accountNumber,
+                              code: req.cashbackCode,
+                              receiptImage: req.receiptImage || undefined,
+                              date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
+                            })}
+                            className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors whitespace-nowrap"
                           >
-                            {copiedAcc === req.accountNumber ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                            <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
+                            <span>Details</span>
                           </button>
-                        </span>
-                        <span>•</span>
-                        <span>Destination: <strong className="text-white">{req.bankName || 'PalmPay Wallet'}</strong></span>
-                      </div>
 
-                      {/* Attached Transaction Receipt Proof Indicator */}
-                      {req.receiptImage && (
-                        <div className="pt-1 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage(req.receiptImage || null)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 text-[11px] text-emerald-300 transition-colors"
-                          >
-                            <img src={req.receiptImage} alt="Receipt thumbnail" className="w-4 h-4 rounded object-cover border border-emerald-400/40 shrink-0" />
-                            <span className="font-semibold">View Transaction Receipt</span>
-                            <Eye className="w-3 h-3 text-emerald-400 ml-0.5" />
-                          </button>
-                        </div>
-                      )}
+                          {req.status === 'pending' && (
+                            <>
+                              <button
+                                disabled={isApproving}
+                                onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved')}
+                                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] hover:opacity-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                {isApproving ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Calling PalmPay API...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Approve &amp; Disburse (₦{req.amount.toLocaleString()})</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                disabled={isApproving}
+                                onClick={() => handleUpdateWithdrawalStatus(req.id, 'rejected')}
+                                className="px-3 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Decline</span>
+                              </button>
+                            </>
+                          )}
 
-                      {req.adminNote && (
-                        <p className="text-[11px] text-rose-300 bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-500/25 mt-1">
-                          ⚠️ {req.adminNote}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 shrink-0">
-                      <div className="text-right">
-                        <div className="text-lg font-black text-[#FFC107] font-mono">
-                          ₦{req.amount.toLocaleString()}
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono block">
-                          Ref: {req.reference || req.id}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedReceiptData({
-                            type: 'withdrawal',
-                            title: `PalmPay Account Withdrawal (${req.bankName || 'PalmPay Wallet'})`,
-                            amount: req.amount,
-                            status: req.status,
-                            reference: req.reference || req.id,
-                            userEmail: req.userEmail,
-                            userName: req.userName,
-                            bankName: req.bankName,
-                            accountNumber: req.accountNumber,
-                            code: req.cashbackCode,
-                            receiptImage: req.receiptImage || undefined,
-                            date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
-                          })}
-                          className="px-3 py-2 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
-                          <span>Details</span>
-                        </button>
-
-                        {req.status === 'pending' && (
-                          <>
+                          {(req.status === 'successful' || req.status === 'approved') && (
                             <button
                               disabled={isApproving}
-                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved')}
-                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] hover:opacity-95 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                              className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              title="Force re-send disbursal of exact amount to PalmPay Account"
                             >
                               {isApproving ? (
                                 <>
                                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Calling PalmPay API...</span>
+                                  <span>Re-syncing...</span>
                                 </>
                               ) : (
                                 <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>Approve &amp; Disburse (₦{req.amount.toLocaleString()})</span>
+                                  <RefreshCw className="w-3.5 h-3.5 text-purple-300" />
+                                  <span>Re-send to PalmPay (₦{req.amount.toLocaleString()})</span>
                                 </>
                               )}
                             </button>
+                          )}
+
+                          {req.status === 'failed' && (
                             <button
                               disabled={isApproving}
-                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'rejected')}
-                              className="px-3 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                              onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
+                              className="px-3 py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50 whitespace-nowrap"
+                              title="Retry disbursing exact amount to PalmPay Account"
                             >
-                              <XCircle className="w-3.5 h-3.5" />
-                              <span>Decline</span>
+                              {isApproving ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Retrying...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  <span>Retry Disbursal (₦{req.amount.toLocaleString()})</span>
+                                </>
+                              )}
                             </button>
-                          </>
-                        )}
-
-                        {(req.status === 'successful' || req.status === 'approved') && (
-                          <button
-                            disabled={isApproving}
-                            onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
-                            className="px-3 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                            title="Force re-send disbursal of exact amount to PalmPay Account"
-                          >
-                            {isApproving ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                <span>Re-syncing...</span>
-                              </>
-                            ) : (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 text-purple-300" />
-                                <span>Re-send to PalmPay (₦{req.amount.toLocaleString()})</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-
-                        {req.status === 'failed' && (
-                          <button
-                            disabled={isApproving}
-                            onClick={() => handleUpdateWithdrawalStatus(req.id, 'approved', true)}
-                            className="px-3 py-2 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
-                            title="Retry disbursing exact amount to PalmPay Account"
-                          >
-                            {isApproving ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                <span>Retrying...</span>
-                              </>
-                            ) : (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                <span>Retry Disbursal (₦{req.amount.toLocaleString()})</span>
-                              </>
-                            )}
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -938,97 +942,99 @@ export const AdminPanel: React.FC = () => {
             <span className="text-xs text-[#FFC107] font-mono font-normal">Pending Orders: {codes.filter(c => c.status === 'pending').length}</span>
           </h3>
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-x-auto max-w-full divide-y divide-white/5 scrollbar-thin">
-            {codes.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
-                No code purchases recorded.
-              </div>
-            ) : (
-              codes.map((c) => (
-                <div key={c.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-sm text-white">{c.generatedCode}</span>
-                      <span className={`text-[10px] font-black uppercase border px-2 py-0.5 rounded-full ${
-                        c.status === 'approved'
-                          ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
-                          : c.status === 'rejected'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                          : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
-                      }`}>
-                        {c.status}
-                      </span>
-                      {c.paymentSource && (
-                        <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
-                          {c.paymentSource === 'deposit_balance' ? 'Paid via Deposit Bal' : 'Paid via Paystack'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-300">
-                      Purchased by: <strong className="text-white font-mono">{c.userEmail}</strong>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center lg:justify-end gap-3 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedReceiptData({
-                        type: 'code',
-                        title: `CashBack Code Purchase (${c.generatedCode})`,
-                        amount: c.codePrice || 8550,
-                        status: c.status,
-                        reference: c.paymentReference || 'PAYSTACK',
-                        userEmail: c.userEmail,
-                        code: c.generatedCode,
-                        receiptImage: c.receiptImage,
-                        date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
-                      })}
-                      className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-[10px] sm:text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"
-                    >
-                      <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
-                      <span>View Receipt</span>
-                    </button>
-
-                    {c.status === 'pending' && (
-                      <div className="flex items-center gap-2 w-full md:w-auto">
-                        <button
-                          onClick={async () => {
-                            await approveCodeOrder(c.id);
-                            triggerCelebration({
-                              title: 'CashBack Code Approved! 🔑',
-                              subtitle: `Code order for ${c.userEmail} approved and code activated.`,
-                              type: 'code',
-                              duration: 3500
-                            });
-                          }}
-                          className="flex-1 md:flex-none px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] sm:text-xs shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Approve</span>
-                        </button>
-
-                        <button
-                          onClick={() => rejectCodeOrder(c.id, 'Unverified payment')}
-                          className="flex-1 md:flex-none px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-[10px] sm:text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1 active:scale-95"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Decline</span>
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="text-right">
-                      <span className="text-base font-bold text-[#FFC107] font-mono">
-                        ₦{(c.codePrice || 8550).toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        Ref: {c.paymentReference || 'PAYSTACK'}
-                      </span>
-                    </div>
-                  </div>
+          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+            <div className="min-w-[950px] divide-y divide-white/5">
+              {codes.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  No code purchases recorded.
                 </div>
-              ))
-            )}
+              ) : (
+                codes.map((c) => (
+                  <div key={c.id} className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-white">{c.generatedCode}</span>
+                        <span className={`text-[10px] font-black uppercase border px-2 py-0.5 rounded-full ${
+                          c.status === 'approved'
+                            ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                            : c.status === 'rejected'
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                            : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                        }`}>
+                          {c.status}
+                        </span>
+                        {c.paymentSource && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
+                            {c.paymentSource === 'deposit_balance' ? 'Paid via Deposit Bal' : 'Paid via Paystack'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-300">
+                        Purchased by: <strong className="text-white font-mono">{c.userEmail}</strong>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-4 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReceiptData({
+                          type: 'code',
+                          title: `CashBack Code Purchase (${c.generatedCode})`,
+                          amount: c.codePrice || 8550,
+                          status: c.status,
+                          reference: c.paymentReference || 'PAYSTACK',
+                          userEmail: c.userEmail,
+                          code: c.generatedCode,
+                          receiptImage: c.receiptImage,
+                          date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
+                        })}
+                        className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-[10px] sm:text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
+                        <span>View Receipt</span>
+                      </button>
+
+                      {c.status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              await approveCodeOrder(c.id);
+                              triggerCelebration({
+                                title: 'CashBack Code Approved! 🔑',
+                                subtitle: `Code order for ${c.userEmail} approved and code activated.`,
+                                type: 'code',
+                                duration: 3500
+                              });
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] sm:text-xs shadow-md transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve</span>
+                          </button>
+
+                          <button
+                            onClick={() => rejectCodeOrder(c.id, 'Unverified payment')}
+                            className="px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-[10px] sm:text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1 active:scale-95 whitespace-nowrap"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Decline</span>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="text-right">
+                        <span className="text-base font-bold text-[#FFC107] font-mono">
+                          ₦{(c.codePrice || 8550).toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          Ref: {c.paymentReference || 'PAYSTACK'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

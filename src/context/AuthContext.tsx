@@ -1295,7 +1295,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Please enter a valid CashBack Code.');
     }
 
+    // Strict validation: Verify this code is not already assigned to another user
     try {
+      const usersRef = collection(db, 'users');
+      const usersSnap = await getDocs(usersRef);
+      let isCodeInUse = false;
+      
+      usersSnap.forEach((docSnap) => {
+        const uData = docSnap.data();
+        if (uData.uid !== user.uid && uData.activeCashbackCode && uData.activeCashbackCode.trim().toLowerCase() === cleanCode.toLowerCase()) {
+          isCodeInUse = true;
+        }
+      });
+
+      if (isCodeInUse) {
+        throw new Error('This CashBack Code is already registered and active on another account. Each unique CashBack Code is restricted to a single PalmPay user account only. Please purchase your own unique code or insert your correct code.');
+      }
+
+      // Verify the code hasn't already been submitted/claimed by another user in code_orders
+      const codesRef = collection(db, 'code_orders');
+      const codesSnap = await getDocs(codesRef);
+      let isCodePendingOrApproved = false;
+
+      codesSnap.forEach((docSnap) => {
+        const cData = docSnap.data();
+        if (cData.uid !== user.uid && cData.generatedCode && cData.generatedCode.trim().toLowerCase() === cleanCode.toLowerCase() && cData.status !== 'rejected') {
+          isCodePendingOrApproved = true;
+        }
+      });
+
+      if (isCodePendingOrApproved) {
+        throw new Error('This CashBack Code has already been submitted or approved for another user. Please insert your correct assigned code or purchase a new one.');
+      }
+
       if (user.uid) {
         await addDoc(collection(db, 'code_orders'), {
           uid: user.uid,
@@ -1313,8 +1345,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           type: 'code'
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Firestore code activation error:', err);
+      throw err;
     }
 
     return true;

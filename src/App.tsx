@@ -271,7 +271,7 @@ const MainAppContent: React.FC = () => {
   return (
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
-      <div className="min-h-screen bg-[#0B0614] text-slate-100 flex flex-col justify-between selection:bg-[#7E1DC6] selection:text-white">
+      <div className="min-h-screen bg-[var(--bg-canvas)] text-[var(--text-primary)] flex flex-col justify-between selection:bg-[#7E1DC6] selection:text-white transition-colors duration-300">
       {/* Top Alert Announcement Banner */}
       <TopAlertBanner />
 
@@ -386,6 +386,34 @@ const MainAppContent: React.FC = () => {
 };
 
 export default function App() {
+  // Listen to system color scheme preferences and adapt dark/light class automatically
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      const isDark = e.matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      }
+    };
+    
+    // Initial check
+    handleChange(mediaQuery);
+    
+    // Listen for updates
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else {
+      mediaQuery.addListener(handleChange);
+      return () => mediaQuery.removeListener(handleChange);
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <CelebrationProvider>

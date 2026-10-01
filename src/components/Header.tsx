@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bell, Settings, Shield, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight, User, KeyRound, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Settings, Shield, Sparkles, CheckCircle2, AlertCircle, X, ChevronRight, User, KeyRound, XCircle, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { NavigationPage, PlatformNotification } from '../types';
 import { PalmPayLogo } from './PalmPayLogo';
@@ -20,6 +20,44 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user, isAdmin, notifications, notificationsCount } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('palmpay_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.add('light');
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('palmpay_theme', theme);
+  }, [theme]);
+
+  // Sync with system preferences
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+      const hasSavedTheme = localStorage.getItem('palmpay_theme');
+      if (!hasSavedTheme) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleSystemThemeChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   return (
     <>
@@ -194,6 +232,20 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Theme Toggle Button */}
+                <button
+                  onClick={toggleTheme}
+                  className="p-2.5 rounded-xl mirror-glass hover:bg-purple-900/10 text-purple-200 hover:text-white transition-all active:scale-95 border border-purple-400/20"
+                  aria-label="Toggle theme"
+                  title={`Switch to ${theme === 'dark' ? 'Light Mode' : 'Dark Mode'}`}
+                >
+                  {theme === 'dark' ? (
+                    <Sun className="w-5 h-5 text-amber-400" />
+                  ) : (
+                    <Moon className="w-5 h-5 text-purple-600" />
+                  )}
+                </button>
 
                 {/* Settings & Profile Gear Icon */}
                 <button
