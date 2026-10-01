@@ -602,7 +602,7 @@ export const AdminPanel: React.FC = () => {
             </div>
           ) : (
             filteredDeposits.map((dep) => (
-              <div key={dep.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+              <div key={dep.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm sm:text-base text-white">{dep.userName}</span>
@@ -671,7 +671,7 @@ export const AdminPanel: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
+                <div className="flex items-center justify-between lg:justify-end gap-4 shrink-0">
                   <div className="text-right">
                     <div className="text-lg font-black text-[#00B875] font-mono">
                       ₦{dep.amount.toLocaleString()}
@@ -753,7 +753,7 @@ export const AdminPanel: React.FC = () => {
                 const isRejected = req.status === 'rejected';
 
                 return (
-                  <div key={req.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                  <div key={req.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-sm sm:text-base text-white">{req.userName}</span>
@@ -816,7 +816,7 @@ export const AdminPanel: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between md:justify-end gap-3 shrink-0">
+                    <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 shrink-0">
                       <div className="text-right">
                         <div className="text-lg font-black text-[#FFC107] font-mono">
                           ₦{req.amount.toLocaleString()}
@@ -945,7 +945,7 @@ export const AdminPanel: React.FC = () => {
               </div>
             ) : (
               codes.map((c) => (
-                <div key={c.id} className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                <div key={c.id} className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-white/5 transition-colors">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sm text-white">{c.generatedCode}</span>
@@ -969,7 +969,7 @@ export const AdminPanel: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center md:justify-end gap-3 flex-wrap">
+                  <div className="flex justify-between items-center lg:justify-end gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setSelectedReceiptData({
