@@ -17,7 +17,8 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
 
   const isDeposit = notification.type === 'deposit';
   const isWithdrawal = notification.type === 'withdrawal';
-  const isFlashAlert = isDeposit || isWithdrawal;
+  const isCodeApproval = notification.type === 'code' && (notification.title.includes('Revealed') || notification.title.includes('Activated'));
+  const isFlashAlert = isDeposit || isWithdrawal || isCodeApproval;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-bottom-5 fade-in duration-300">
@@ -26,6 +27,8 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
           ? 'border-2 border-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.5)] bg-[#071d18]/95 animate-pulse' 
           : isWithdrawal 
           ? 'border-2 border-amber-500/80 shadow-[0_0_35px_rgba(245,158,11,0.5)] bg-[#1e1305]/95 animate-pulse' 
+          : isCodeApproval
+          ? 'border-2 border-purple-500/80 shadow-[0_0_35px_rgba(126,29,198,0.5)] bg-[#120822]/95 animate-pulse'
           : 'border border-purple-500/40 shadow-[0_10px_40px_rgba(126,29,198,0.4)] bg-[#140924]/95'
       }`}>
         {/* Animated Flash Header Line */}
@@ -34,6 +37,8 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
             ? 'bg-gradient-to-r from-emerald-500 via-teal-300 to-emerald-500 animate-pulse' 
             : isWithdrawal 
             ? 'bg-gradient-to-r from-amber-500 via-yellow-200 to-amber-500 animate-pulse' 
+            : isCodeApproval
+            ? 'bg-gradient-to-r from-purple-500 via-amber-300 to-purple-500 animate-pulse'
             : 'bg-gradient-to-r from-purple-500 via-[#FFC107] to-purple-500'
         }`} />
 

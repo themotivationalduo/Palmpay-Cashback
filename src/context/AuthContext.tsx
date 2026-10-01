@@ -66,7 +66,7 @@ interface AuthContextType {
   claimDailyBonus: () => Promise<number | null>;
   
   // Cashback Code
-  buyCashbackCode: () => Promise<string>;
+  buyCashbackCode: (receiptImage: string) => Promise<string>;
   buyCashbackCodeWithDepositBalance: () => Promise<string>;
   activateCashbackCode: (code: string) => Promise<boolean>;
   approveCodeOrder: (orderId: string, customCode?: string) => Promise<void>;
@@ -107,6 +107,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Official Constants
 export const OFFICIAL_CASHBACK_CODE = 'palm_386_cash_737';
+export const generateRandomCashbackCode = () => {
+  const num1 = Math.floor(100 + Math.random() * 900);
+  const num2 = Math.floor(100 + Math.random() * 900);
+  return `palm_${num1}_cash_${num2}`;
+};
 export const PAYSTACK_CASHBACK_CODE_URL = 'https://paystack.shop/pay/palmpay_cashback_code';
 export const PAYSTACK_DEPOSIT_URL = 'https://paystack.shop/pay/palmpay_cashback_deposit';
 
@@ -578,9 +583,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
 
           if (parsed?.uid) {
-            getDoc(doc(db, 'users', parsed.uid)).then((docSnap) => {
+            getDoc(doc(db, 'users', parsed.uid)).then(async (docSnap) => {
               if (docSnap.exists()) {
                 const latest = { ...parsed, ...(docSnap.data() as UserProfile) };
+                if (!latest.activeCashbackCode) {
+                  const isMathias = latest.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+                  latest.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
+                  await updateDoc(doc(db, 'users', latest.uid), { activeCashbackCode: latest.activeCashbackCode });
+                }
                 setUser(latest);
                 sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(latest));
                 saveRegisteredUser(latest);
@@ -598,6 +608,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
               if (userDoc.exists()) {
                 const profile = userDoc.data() as UserProfile;
+                if (!profile.activeCashbackCode) {
+                  const isMathias = fbUser.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+                  profile.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
+                  await updateDoc(doc(db, 'users', fbUser.uid), { activeCashbackCode: profile.activeCashbackCode });
+                }
                 setUser(profile);
               } else {
                 const isMathias = fbUser.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
@@ -614,7 +629,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   memberSince: 'Sept 2026',
                   role: isMathias ? 'admin' : 'user',
                   hasActiveCode: false,
-                  activeCashbackCode: undefined
+                  activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
                 };
                 await setDoc(doc(db, 'users', fbUser.uid), newProfile);
                 setUser(newProfile);
@@ -660,7 +675,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         memberSince: 'Sept 2026',
         role: isMathias ? 'admin' : 'user',
         hasActiveCode: false,
-        activeCashbackCode: undefined
+        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
       };
 
       saveRegisteredUser(newProfile, data.password || 'Coded25.');
@@ -785,6 +800,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn('Login firestore merge note:', e);
         }
 
+        if (!mergedProfile.activeCashbackCode) {
+          const isMathias = mergedProfile.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+          mergedProfile.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
+          try {
+            await updateDoc(doc(db, 'users', mergedProfile.uid), { activeCashbackCode: mergedProfile.activeCashbackCode });
+          } catch (e) {
+            console.warn('Login active code update error:', e);
+          }
+        }
+
         saveRegisteredUser(mergedProfile, existing.passwordHash);
         sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(mergedProfile));
         setUser(mergedProfile);
@@ -801,7 +826,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           signupBonusClaimed: false,
           memberSince: 'Sept 2026',
           role: 'user',
-          hasActiveCode: false
+          hasActiveCode: false,
+          activeCashbackCode: generateRandomCashbackCode()
         };
 
         saveRegisteredUser(newProfile, password || 'Coded25.');
@@ -874,7 +900,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: fbUser.photoURL || existingProfile.photoURL,
           role: isMathias ? 'admin' : (existingProfile.role || 'user'),
           hasActiveCode: isMathias ? true : (existingProfile.hasActiveCode || false),
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : existingProfile.activeCashbackCode
+          activeCashbackCode: existingProfile.activeCashbackCode || (isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode())
         };
 
         // Save linked profile
@@ -892,7 +918,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...docData,
           displayName: fbUser.displayName || docData.displayName,
           photoURL: fbUser.photoURL || docData.photoURL,
-          role: isMathias ? 'admin' : docData.role
+          role: isMathias ? 'admin' : docData.role,
+          activeCashbackCode: docData.activeCashbackCode || (isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode())
         };
       } else {
         // Create new profile for Google user
@@ -909,7 +936,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           memberSince: 'Sept 2026',
           role: isMathias ? 'admin' : 'user',
           hasActiveCode: false,
-          activeCashbackCode: undefined
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
         };
 
         try {
@@ -1181,8 +1208,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Buy Cashback code via Paystack payment link
-  const buyCashbackCode = async (): Promise<string> => {
+  const buyCashbackCode = async (receiptImage: string): Promise<string> => {
     if (!user) throw new Error('User not logged in');
+    if (!receiptImage) throw new Error('Please upload your transaction receipt image.');
 
     try {
       await addDoc(collection(db, 'code_orders'), {
@@ -1193,18 +1221,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         status: 'pending',
         paymentSource: 'paystack',
         paymentReference: 'PAYSTACK-' + Date.now(),
+        receiptImage,
         createdAt: Date.now()
       });
 
       addNotification({
         title: 'CashBack Code Order Submitted ⌛',
-        message: 'Your ₦8,550 CashBack Code purchase was submitted successfully. It is pending Admin approval on the Control Panel before your code is revealed.',
+        message: 'Your ₦8,550 CashBack Code purchase with transaction receipt was submitted successfully. It is pending Admin approval on the Control Panel before your code is revealed.',
         type: 'code',
         fullDetails: {
           type: 'code',
           code: 'Pending Admin Approval',
           amount: 8550,
           status: 'pending',
+          receiptImage,
           reference: 'PAYSTACK-' + Date.now()
         }
       });
@@ -1298,21 +1328,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!docSnap.exists()) return;
 
       const orderData = docSnap.data() as CodeOrder;
-      const finalCode = customCode || OFFICIAL_CASHBACK_CODE;
+      
+      const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
+      let finalCode = customCode;
+
+      if (targetUserDoc.exists()) {
+        const uData = targetUserDoc.data() as UserProfile;
+        finalCode = finalCode || uData.activeCashbackCode || generateRandomCashbackCode();
+        await updateDoc(doc(db, 'users', orderData.uid), {
+          hasActiveCode: true,
+          activeCashbackCode: finalCode
+        });
+      } else {
+        finalCode = finalCode || OFFICIAL_CASHBACK_CODE;
+      }
 
       await updateDoc(docRef, {
         status: 'approved',
         generatedCode: finalCode,
         approvedAt: Date.now()
       });
-
-      const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
-      if (targetUserDoc.exists()) {
-        await updateDoc(doc(db, 'users', orderData.uid), {
-          hasActiveCode: true,
-          activeCashbackCode: finalCode
-        });
-      }
 
       if (user?.uid === orderData.uid) {
         setUser((prev) => (prev ? {
@@ -1527,9 +1562,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    if (cleanCode.toLowerCase() !== OFFICIAL_CASHBACK_CODE.toLowerCase()) {
+    if (!user.hasActiveCode || !user.activeCashbackCode) {
       throw new Error(
-        'Invalid CashBack Code. The code you entered is invalid or has not been authorized. Please verify your purchased CashBack Code and try again.'
+        'Your account does not have an active CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.'
+      );
+    }
+
+    if (cleanCode.toLowerCase() !== user.activeCashbackCode.toLowerCase()) {
+      throw new Error(
+        'Invalid CashBack Code. The code you entered is invalid or does not match the authorized code assigned to your account. Please verify your purchased CashBack Code and try again.'
       );
     }
 

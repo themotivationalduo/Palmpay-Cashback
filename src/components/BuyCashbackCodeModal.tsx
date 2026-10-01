@@ -9,7 +9,10 @@ import {
   CreditCard, 
   CheckCircle2, 
   Coins,
-  Lock
+  Lock,
+  Upload,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { useAuth, PAYSTACK_CASHBACK_CODE_URL } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -27,14 +30,19 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
   onCodePurchased,
   onProceedToWithdraw
 }) => {
-  const { user, activateCashbackCode, buyCashbackCodeWithDepositBalance } = useAuth();
+  const { user, buyCashbackCode, activateCashbackCode, buyCashbackCodeWithDepositBalance } = useAuth();
   const { triggerCelebration } = useCelebration();
   const [inputCode, setInputCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [depLoading, setDepLoading] = useState(false);
+  const [paystackLoading, setPaystackLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Receipt image upload states for Paystack store purchase
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -59,6 +67,70 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
   const handleOpenPaystack = () => {
     if (hasPurchasedCode) return;
     window.open(PAYSTACK_CASHBACK_CODE_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  // Handle image upload from file select
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select a valid image file (PNG, JPG, JPEG, WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image file size must be less than 5MB.');
+      return;
+    }
+
+    setError(null);
+    setFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setReceiptImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Buy Cashback Code with Paystack + MANDATORY Receipt
+  const handleBuyCashbackCodeWithReceipt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (hasPurchasedCode) {
+      setError('You already have an active CashBack Code linked to this account.');
+      return;
+    }
+
+    if (!receiptImage) {
+      setError('Please upload your Paystack payment receipt image to complete your order. Upload is mandatory.');
+      return;
+    }
+
+    setError(null);
+    setPaystackLoading(true);
+
+    try {
+      await buyCashbackCode(receiptImage);
+      setSuccessMessage('Your Cashback Code order was submitted successfully with receipt proof! Once verified by admin, your code will be revealed here.');
+      
+      triggerCelebration({
+        title: 'Order Submitted! 💳',
+        subtitle: 'Your transaction receipt is submitted for admin review. Your code will be released shortly.',
+        type: 'code',
+        duration: 4500
+      });
+
+      setReceiptImage(null);
+      setFileName('');
+      if (onCodePurchased) {
+        onCodePurchased('Pending Admin Approval');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error processing Cashback Code purchase request.');
+    } finally {
+      setPaystackLoading(false);
+    }
   };
 
   // Buy directly using Deposited Balance
@@ -137,7 +209,7 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-amber-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.9)] relative my-8">
+      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-amber-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.9)] relative my-8 max-h-[90vh] overflow-y-auto scrollbar-thin">
         
         {/* Ambient Glow */}
         <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -292,7 +364,7 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
           )}
         </div>
 
-        {/* Option 2: Pay on Paystack Store */}
+        {/* Option 2: Pay on Paystack Store + MANDATORY RECEIPT */}
         <div className={`mt-4 p-4 rounded-2xl border space-y-3 transition-all ${
           hasPurchasedCode 
             ? 'bg-white/5 border-white/10 opacity-60' 
@@ -304,14 +376,15 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
                 2
               </span>
               <span className="text-xs font-bold text-white uppercase tracking-wider">
-                Pay on Official Paystack Store
+                Pay via Paystack &amp; Submit Receipt
               </span>
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">paystack.shop</span>
+            <span className="text-[10px] text-slate-400 font-mono">Mandatory Proof</span>
           </div>
 
           <p className="text-[11px] text-slate-300 leading-relaxed">
-            Pay <strong>₦8,550</strong> online through the verified Paystack gateway.
+            1. Open and pay <strong>₦8,550</strong> online through the verified Paystack portal.<br />
+            2. Take a screenshot or download your receipt, then upload it below. Proof of payment is **mandatory** to release your CashBack Code.
           </p>
 
           {hasPurchasedCode ? (
@@ -324,17 +397,79 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
               <span>Purchase Disabled (Already Active)</span>
             </button>
           ) : (
-            <a
-              href={PAYSTACK_CASHBACK_CODE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={handleOpenPaystack}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-black text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,193,7,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>Pay ₦8,550 on Paystack</span>
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            <div className="space-y-4">
+              <a
+                href={PAYSTACK_CASHBACK_CODE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleOpenPaystack}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black font-black text-xs sm:text-sm shadow-[0_6px_25px_rgba(255,193,7,0.35)] hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Step 1: Pay ₦8,550 on Paystack</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              {/* Mandatory Receipt Upload Input */}
+              <form onSubmit={handleBuyCashbackCodeWithReceipt} className="space-y-3.5 pt-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                  <Upload className="w-4 h-4 text-[#00B875]" />
+                  <span>Step 2: Upload Payment Receipt (Mandatory)</span>
+                </div>
+
+                {receiptImage ? (
+                  <div className="p-3 rounded-2xl bg-black/60 border border-emerald-500/40 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-emerald-400 font-bold flex items-center gap-1.5 truncate">
+                        <ImageIcon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{fileName || 'Receipt Preview'}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReceiptImage(null);
+                          setFileName('');
+                        }}
+                        className="text-red-400 hover:text-red-300 p-1"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="max-h-40 overflow-hidden rounded-xl border border-white/10 bg-black/80 flex items-center justify-center">
+                      <img
+                        src={receiptImage}
+                        alt="Receipt Preview"
+                        className="max-h-40 w-auto object-contain rounded-lg"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <label className="border-2 border-dashed border-white/20 hover:border-[#00B875] rounded-2xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-black/30 hover:bg-black/50 transition-colors">
+                    <Upload className="w-6 h-6 text-slate-400" />
+                    <span className="text-xs font-semibold text-slate-200 text-center">
+                      Click to upload Paystack transaction receipt image
+                    </span>
+                    <span className="text-[10px] text-slate-400">PNG, JPG, JPEG, WEBP up to 5MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                      required
+                    />
+                  </label>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={paystackLoading || !receiptImage}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-bold text-xs sm:text-sm hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{paystackLoading ? 'Submitting Receipt...' : 'Step 3: Submit Receipt for Code Release'}</span>
+                </button>
+              </form>
+            </div>
           )}
         </div>
 

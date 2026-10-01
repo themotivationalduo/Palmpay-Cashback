@@ -980,6 +980,7 @@ export const AdminPanel: React.FC = () => {
                         reference: c.paymentReference || 'PAYSTACK',
                         userEmail: c.userEmail,
                         code: c.generatedCode,
+                        receiptImage: c.receiptImage,
                         date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
                       })}
                       className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-[10px] sm:text-xs font-semibold border border-purple-500/30 flex items-center gap-1.5 transition-colors"

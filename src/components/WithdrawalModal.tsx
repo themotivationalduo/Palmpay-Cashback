@@ -204,13 +204,13 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       return;
     }
 
-    if (cleanCode !== OFFICIAL_CASHBACK_CODE.toLowerCase()) {
-      setError('Invalid CashBack Code. The code you entered is invalid or has not been authorized. Please verify your purchased code and try again.');
+    if (!user?.hasActiveCode || !user?.activeCashbackCode) {
+      setError('Your account does not have an active CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.');
       return;
     }
 
-    if (!receiptImage) {
-      setError('Transaction receipt image required. Please upload your transaction receipt before submitting for admin approval.');
+    if (cleanCode !== user.activeCashbackCode.toLowerCase()) {
+      setError('Invalid CashBack Code. The code you entered is invalid or does not match the authorized code assigned to your account. Please verify your purchased code and try again.');
       return;
     }
 
@@ -224,8 +224,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         userName: accountName.trim() || user?.displayName || `PalmPay Beneficiary (${cleanAcc})`,
         amount: numAmount,
         cashbackCode: cleanCode,
-        balanceSource,
-        receiptImage
+        balanceSource
       });
 
       setTxRef(reference);
@@ -462,68 +461,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 />
               </div>
 
-              {/* 4. Transaction Receipt Image Proof Upload */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Upload className="w-3.5 h-3.5 text-[#00B875]" />
-                    Transaction Receipt Proof <span className="text-red-400">*</span>
-                  </span>
-                  <span className="text-[10px] text-purple-300 font-medium">Required for Admin Review</span>
-                </label>
 
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleReceiptUpload}
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  className="hidden"
-                  id="withdrawal-receipt-upload"
-                />
-
-                {!receiptImage ? (
-                  <label
-                    htmlFor="withdrawal-receipt-upload"
-                    className="w-full p-3 rounded-2xl border-2 border-dashed border-purple-500/35 hover:border-purple-400 bg-white/5 hover:bg-white/10 cursor-pointer transition-all flex flex-col items-center justify-center gap-1 text-center group"
-                  >
-                    <Upload className="w-4 h-4 text-[#FFC107] group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-white">Click to upload transaction receipt</span>
-                    <span className="text-[10px] text-slate-400">PNG, JPG, JPEG, WEBP (Max 4MB)</span>
-                  </label>
-                ) : (
-                  <div className="relative rounded-2xl border border-emerald-500/40 bg-black/50 p-2.5 flex items-center gap-3">
-                    <img
-                      src={receiptImage}
-                      alt="Uploaded Receipt"
-                      className="w-12 h-12 object-cover rounded-xl border border-white/10 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1 text-emerald-400 text-xs font-bold">
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">Receipt Attached</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400 truncate">
-                        {receiptFileName || 'transaction_receipt.png'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={removeReceiptImage}
-                      className="p-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-300 text-xs transition-colors shrink-0"
-                      title="Remove image"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {receiptError && (
-                  <p className="text-[11px] text-red-400 flex items-center gap-1 mt-1">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{receiptError}</span>
-                  </p>
-                )}
-              </div>
 
               {/* Submit Button */}
               <div className="pt-2">
@@ -671,7 +609,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     <span className="text-[10px] text-[#00B875] font-bold">In Queue</span>
                   </div>
                   <p className="text-[11px] text-slate-300/90 truncate mt-0.5">
-                    Clearance code & receipt attached • Automatic payout trigger upon approval
+                    Clearance code verified • Automatic payout trigger upon approval
                   </p>
                 </div>
               </div>
