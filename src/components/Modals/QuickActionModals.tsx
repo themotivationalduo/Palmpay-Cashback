@@ -25,14 +25,30 @@ import confetti from 'canvas-confetti';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isStandalone?: boolean;
 }
 
 // 1. Community Modal
-export const CommunityModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-      <div className="mirror-glass-card max-w-md w-full rounded-3xl p-6 border border-white/20 shadow-2xl relative space-y-4">
+export const CommunityModal: React.FC<ModalProps> = ({ isOpen, onClose, isStandalone = false }) => {
+  if (!isOpen && !isStandalone) return null;
+
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-6 border border-white/20 shadow-2xl relative space-y-4 my-2 sm:my-4">
+      {/* Standalone Header */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 text-blue-200 hover:text-white text-xs font-bold transition-all border border-blue-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-blue-300 bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+            Community Hub
+          </span>
+        </div>
+      )}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
@@ -97,12 +113,25 @@ export const CommunityModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };
 
 // 2. Add Money Modal (Paystack Deposit + Receipt Upload & Admin Approval)
-export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
+export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose, isStandalone = false }) => {
   const { user, submitDepositRequest, depositRequests } = useAuth();
   const { triggerCelebration } = useCelebration();
   
@@ -116,7 +145,7 @@ export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
   const [success, setSuccess] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'deposit' | 'history'>('deposit');
 
-  if (!isOpen) return null;
+  if (!isOpen && !isStandalone) return null;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -190,12 +219,26 @@ export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
 
   const userDeposits = depositRequests.filter((d) => d.uid === user?.uid);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-emerald-500/30 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-8">
-        
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-5 sm:p-7 border border-emerald-500/30 shadow-[0_25px_70px_rgba(0,0,0,0.9)] relative my-2 sm:my-4">
+      {/* Glow */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Standalone Back Navigation Bar */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3.5 border-b border-emerald-500/20 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 hover:text-white text-xs font-bold transition-all border border-emerald-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-[#00B875] bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+            Fund Wallet
+          </span>
+        </div>
+      )}
 
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -502,12 +545,25 @@ export const AddMoneyModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
         )}
 
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };
 
 // 3. Support Live Chat Modal
-export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
+export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose, isStandalone = false }) => {
   const [messages, setMessages] = useState<{ sender: 'agent' | 'user'; text: string; time: string }[]>([
     {
       sender: 'agent',
@@ -517,7 +573,7 @@ export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
   ]);
   const [input, setInput] = useState('');
 
-  if (!isOpen) return null;
+  if (!isOpen && !isStandalone) return null;
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -542,9 +598,23 @@ export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
     }, 1000);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
-      <div className="mirror-glass-card max-w-md w-full rounded-3xl p-5 sm:p-6 border border-white/20 shadow-2xl relative flex flex-col h-[520px]">
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-5 sm:p-6 border border-white/20 shadow-2xl relative flex flex-col h-[520px] my-2 sm:my-4">
+      {/* Standalone Header */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0 mb-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 hover:text-white text-xs font-bold transition-all border border-purple-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-purple-300 bg-purple-500/15 px-2.5 py-0.5 rounded-full border border-purple-500/30">
+            24/7 Support Desk
+          </span>
+        </div>
+      )}
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
@@ -606,6 +676,19 @@ export const SupportModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
           </button>
         </form>
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };

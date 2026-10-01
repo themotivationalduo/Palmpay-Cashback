@@ -51,10 +51,8 @@ const DashboardContent: React.FC<{
   onOpenCommunity,
   onOpenSupport
 }) => {
-  const { user, isAdmin } = useAuth();
-
   return (
-    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8">
+    <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8 min-h-[75vh]">
       {/* 1. Main Dashboard View */}
       {currentPage === 'dashboard' && (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
@@ -88,83 +86,96 @@ const DashboardContent: React.FC<{
         </div>
       )}
 
-      {/* 3. CashBack Code Portal (Dedicated Exclusively to Code Purchases) */}
-      {currentPage === 'code' && (
-        <div className="max-w-xl mx-auto space-y-6 py-4 sm:py-8 animate-in fade-in duration-300">
-          <div className="mirror-glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl relative text-center space-y-6">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-[#FFC107] text-black shadow-lg flex items-center justify-center">
-              <KeyRound className="w-7 h-7" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h2 className="text-xl sm:text-2xl font-bold text-white font-['Poppins',sans-serif]">
-                CashBack Code Portal
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300">
-                Official PalmPay Clearance Code Purchase &amp; Activation
-              </p>
-            </div>
-
-            {user?.hasActiveCode && user?.activeCashbackCode ? (
-              <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 text-left space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#00B875]" />
-                    Code Active on Account
-                  </span>
-                  <span className="text-[10px] bg-emerald-500/20 text-[#00B875] font-mono px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
-                    PURCHASED
-                  </span>
-                </div>
-                <p className="text-xs text-emerald-200/90">
-                  You have already purchased and linked a verified CashBack Code to your account. Code purchase is disabled.
-                </p>
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between">
-                <span className="text-xs sm:text-sm text-slate-300 font-medium">Clearance Code Price:</span>
-                <span className="text-lg sm:text-xl font-extrabold text-[#FFC107] font-mono">₦8,550</span>
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                onClick={onOpenBuyCode}
-                disabled={Boolean(user?.hasActiveCode && user?.activeCashbackCode)}
-                className={`flex-1 py-3.5 rounded-2xl font-extrabold text-sm shadow-lg transition-all text-center flex items-center justify-center gap-2 ${
-                  user?.hasActiveCode && user?.activeCashbackCode
-                    ? 'bg-white/10 text-slate-400 border border-white/15 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black hover:opacity-95 active:scale-95'
-                }`}
-              >
-                {user?.hasActiveCode && user?.activeCashbackCode ? (
-                  <>
-                    <Lock className="w-4 h-4" />
-                    <span>Code Already Purchased</span>
-                  </>
-                ) : (
-                  <span>Purchase CashBack Code (₦8,550)</span>
-                )}
-              </button>
-              <button
-                onClick={onOpenVerification}
-                className="flex-1 py-3.5 rounded-2xl mirror-glass hover:bg-white/10 text-white font-bold text-sm border border-white/20 transition-all text-center"
-              >
-                View Clearance Status
-              </button>
-            </div>
-          </div>
+      {/* 3. CashBack Code Portal (Standalone Page) */}
+      {(currentPage === 'code' || currentPage === 'buy-code') && (
+        <div className="animate-in fade-in duration-300">
+          <BuyCashbackCodeModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+            onCodePurchased={() => setCurrentPage('verification')}
+            onProceedToWithdraw={() => setCurrentPage('withdraw')}
+          />
         </div>
       )}
 
-      {/* 4. Full Activity & History Ledger Page */}
+      {/* 4. Standalone Withdrawal Page */}
+      {currentPage === 'withdraw' && (
+        <div className="animate-in fade-in duration-300">
+          <WithdrawalModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+            onOpenBuyCode={() => setCurrentPage('buy-code')}
+          />
+        </div>
+      )}
+
+      {/* 5. Standalone Deposit / Fund Wallet Page */}
+      {currentPage === 'add-money' && (
+        <div className="animate-in fade-in duration-300">
+          <AddMoneyModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+          />
+        </div>
+      )}
+
+      {/* 6. Standalone Verification Clearance Page */}
+      {currentPage === 'verification' && (
+        <div className="animate-in fade-in duration-300">
+          <VerificationNotificationModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+            onProceedToWithdraw={() => setCurrentPage('withdraw')}
+          />
+        </div>
+      )}
+
+      {/* 7. Standalone Settings & Profile Page */}
+      {currentPage === 'profile' && (
+        <div className="animate-in fade-in duration-300">
+          <SettingsProfileModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+            onOpenAdminPanel={() => setCurrentPage('admin')}
+          />
+        </div>
+      )}
+
+      {/* 8. Standalone Community Hub Page */}
+      {currentPage === 'community' && (
+        <div className="animate-in fade-in duration-300">
+          <CommunityModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+          />
+        </div>
+      )}
+
+      {/* 9. Standalone 24/7 Support Desk Page */}
+      {currentPage === 'support' && (
+        <div className="animate-in fade-in duration-300">
+          <SupportModal
+            isOpen={true}
+            isStandalone={true}
+            onClose={() => setCurrentPage('dashboard')}
+          />
+        </div>
+      )}
+
+      {/* 10. Full Activity & History Ledger Page */}
       {currentPage === 'transactions' && (
         <div className="animate-in fade-in duration-300">
           <TransactionsLedger isFullPage={true} />
         </div>
       )}
 
-      {/* 5. Admin Panel View for themotivationalduo@gmail.com */}
+      {/* 11. Admin Panel View */}
       {currentPage === 'admin' && (
         <div className="animate-in fade-in duration-300">
           <AdminPanel />
@@ -178,24 +189,22 @@ const getPageFromPath = (): NavigationPage => {
   if (typeof window === 'undefined') return 'dashboard';
   const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
   if (path.endsWith('/game')) return 'game';
-  if (path.endsWith('/code')) return 'code';
+  if (path.endsWith('/code') || path.endsWith('/buy-code')) return 'buy-code';
+  if (path.endsWith('/withdraw')) return 'withdraw';
+  if (path.endsWith('/add-money') || path.endsWith('/deposit')) return 'add-money';
+  if (path.endsWith('/verification') || path.endsWith('/clearance')) return 'verification';
+  if (path.endsWith('/community') || path.endsWith('/whatsapp')) return 'community';
+  if (path.endsWith('/support')) return 'support';
   if (path.endsWith('/transactions') || path.endsWith('/ledger')) return 'transactions';
   if (path.endsWith('/admin')) return 'admin';
-  if (path.endsWith('/profile')) return 'profile';
+  if (path.endsWith('/profile') || path.endsWith('/settings')) return 'profile';
   return 'dashboard';
 };
 
 const MainAppContent: React.FC = () => {
-  const { user, loading, activeToast, setActiveToast } = useAuth();
+  const { user, activeToast, setActiveToast } = useAuth();
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [currentPage, setCurrentPageState] = useState<NavigationPage>(() => getPageFromPath());
-  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(() => getPageFromPath() === 'profile');
-  const [showWithdrawalModal, setShowWithdrawalModal] = useState<boolean>(false);
-  const [showBuyCodeModal, setShowBuyCodeModal] = useState<boolean>(false);
-  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
-  const [showCommunityModal, setShowCommunityModal] = useState<boolean>(false);
-  const [showAddMoneyModal, setShowAddMoneyModal] = useState<boolean>(false);
-  const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
   const [selectedNotification, setSelectedNotification] = useState<PlatformNotification | null>(null);
   
   const [showWAModal, setShowWAModal] = useState<boolean>(false);
@@ -228,12 +237,9 @@ const MainAppContent: React.FC = () => {
     setShowWAModal(false);
   };
 
-  // Sync state -> URL prefix (/dashboard, /game, /code, /transactions, /admin, /profile)
+  // Sync state -> URL prefix (/dashboard, /game, /withdraw, /buy-code, /add-money, /transactions, /admin, /profile, /community, /support)
   const setCurrentPage = (page: NavigationPage) => {
     setCurrentPageState(page);
-    if (page === 'profile') {
-      setShowSettingsModal(true);
-    }
     if (typeof window !== 'undefined') {
       const targetPath = page === 'dashboard' ? '/dashboard' : `/${page}`;
       if (window.location.pathname !== targetPath) {
@@ -247,20 +253,12 @@ const MainAppContent: React.FC = () => {
     const handlePopState = () => {
       const page = getPageFromPath();
       setCurrentPageState(page);
-      if (page === 'profile') {
-        setShowSettingsModal(true);
-      }
     };
 
     if (typeof window !== 'undefined') {
       const currentPath = window.location.pathname;
       if (currentPath === '/' || currentPath === '') {
         window.history.replaceState({ page: 'dashboard' }, '', '/dashboard');
-      } else {
-        const initialPage = getPageFromPath();
-        if (initialPage === 'profile') {
-          setShowSettingsModal(true);
-        }
       }
     }
 
@@ -279,7 +277,7 @@ const MainAppContent: React.FC = () => {
       <Header
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
-        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenSettings={() => setCurrentPage('profile')}
         onOpenNotifications={() => setCurrentPage('transactions')}
         onSelectNotification={(notif) => setSelectedNotification(notif)}
       />
@@ -302,71 +300,27 @@ const MainAppContent: React.FC = () => {
         <AuthScreen />
       ) : (
         <>
-          {/* Central Dashboard / Pages View */}
+          {/* Central Dashboard / Standalone Pages View */}
           <DashboardContent
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
-            onOpenWithdrawal={() => setShowWithdrawalModal(true)}
-            onOpenBuyCode={() => setShowBuyCodeModal(true)}
-            onOpenAddMoney={() => setShowAddMoneyModal(true)}
-            onOpenVerification={() => setShowVerificationModal(true)}
-            onOpenSettings={() => setShowSettingsModal(true)}
-            onOpenCommunity={() => setShowCommunityModal(true)}
-            onOpenSupport={() => setShowSupportModal(true)}
+            onOpenWithdrawal={() => setCurrentPage('withdraw')}
+            onOpenBuyCode={() => setCurrentPage('buy-code')}
+            onOpenAddMoney={() => setCurrentPage('add-money')}
+            onOpenVerification={() => setCurrentPage('verification')}
+            onOpenSettings={() => setCurrentPage('profile')}
+            onOpenCommunity={() => setCurrentPage('community')}
+            onOpenSupport={() => setCurrentPage('support')}
           />
 
           {/* Floating Bottom Navigation Bar (hides on scroll, visible when stopped) */}
           <FloatingBottomNav
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
-            onOpenProfile={() => setShowSettingsModal(true)}
+            onOpenProfile={() => setCurrentPage('profile')}
           />
 
-          {/* Modals & Overlays */}
-          <SettingsProfileModal
-            isOpen={showSettingsModal}
-            onClose={() => {
-              setShowSettingsModal(false);
-              if (currentPage === 'profile') {
-                setCurrentPage('dashboard');
-              }
-            }}
-          />
-
-          <WithdrawalModal
-            isOpen={showWithdrawalModal}
-            onClose={() => setShowWithdrawalModal(false)}
-            onOpenBuyCode={() => setShowBuyCodeModal(true)}
-          />
-
-          <BuyCashbackCodeModal
-            isOpen={showBuyCodeModal}
-            onClose={() => setShowBuyCodeModal(false)}
-            onCodePurchased={() => setShowVerificationModal(true)}
-            onProceedToWithdraw={() => setShowWithdrawalModal(true)}
-          />
-
-          <VerificationNotificationModal
-            isOpen={showVerificationModal}
-            onClose={() => setShowVerificationModal(false)}
-            onProceedToWithdraw={() => setShowWithdrawalModal(true)}
-          />
-
-          <CommunityModal
-            isOpen={showCommunityModal}
-            onClose={() => setShowCommunityModal(false)}
-          />
-
-          <AddMoneyModal
-            isOpen={showAddMoneyModal}
-            onClose={() => setShowAddMoneyModal(false)}
-          />
-
-          <SupportModal
-            isOpen={showSupportModal}
-            onClose={() => setShowSupportModal(false)}
-          />
-
+          {/* WhatsApp Channel Onboarding Overlay */}
           <WhatsAppChannelModal
             isOpen={showWAModal}
             onClose={handleCloseWAModal}

@@ -7,12 +7,14 @@ interface SettingsProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAdminPanel?: () => void;
+  isStandalone?: boolean;
 }
 
 export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   isOpen,
   onClose,
-  onOpenAdminPanel
+  onOpenAdminPanel,
+  isStandalone = false
 }) => {
   const { user, logout, isAdmin, referrals } = useAuth();
   const { triggerCelebration } = useCelebration();
@@ -20,7 +22,7 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   const [isUltraDarkMode, setIsUltraDarkMode] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isStandalone) return null;
 
   const userEmail = user?.email || 'user@example.com';
   const referralCode = user?.referralCode || 'PALM2026';
@@ -60,12 +62,26 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
     return `${masked}@${domainPart}`;
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-white/20 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-8 max-h-[90vh] overflow-y-auto">
-        
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-44 h-44 bg-[#00B875]/15 rounded-full blur-2xl pointer-events-none" />
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-2 sm:my-4">
+      {/* Glow */}
+      <div className="absolute top-0 right-0 w-44 h-44 bg-[#00B875]/15 rounded-full blur-2xl pointer-events-none" />
+
+      {/* Standalone Back Header */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3.5 border-b border-purple-500/20 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 hover:text-white text-xs font-bold transition-all border border-purple-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-purple-300 bg-purple-500/15 px-2.5 py-0.5 rounded-full border border-purple-500/30">
+            Account Profile
+          </span>
+        </div>
+      )}
 
         {/* Top Header */}
         <div className="flex items-center justify-between pb-4 border-b border-purple-500/20 sticky top-0 bg-[#120822]/90 backdrop-blur-md z-10 -mx-2 px-2 pt-1">
@@ -319,6 +335,19 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
         </div>
 
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };

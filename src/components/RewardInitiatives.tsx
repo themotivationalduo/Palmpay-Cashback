@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award, RefreshCw, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 
@@ -15,6 +15,46 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
   const [claimingSignup, setClaimingSignup] = useState(false);
   const [dailyClaimMsg, setDailyClaimMsg] = useState<string | null>(null);
 
+  const [timeLeftMs, setTimeLeftMs] = useState<number>(0);
+
+  // Real-time 24-Hour Countdown Timer Engine
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const claimTimestamp = user?.dailyClaimTimestamp ? Number(user.dailyClaimTimestamp) : null;
+      if (!claimTimestamp) {
+        if (user?.dailyClaimDate === new Date().toISOString().split('T')[0]) {
+          return 12 * 60 * 60 * 1000;
+        }
+        return 0;
+      }
+
+      const targetTime = claimTimestamp + (24 * 60 * 60 * 1000);
+      const diff = targetTime - Date.now();
+      return diff > 0 ? diff : 0;
+    };
+
+    setTimeLeftMs(calculateTimeLeft());
+
+    const timer = setInterval(() => {
+      setTimeLeftMs(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [user?.dailyClaimTimestamp, user?.dailyClaimDate]);
+
+  // Format milliseconds into HH:MM:SS
+  const formatCountdown = (ms: number) => {
+    if (ms <= 0) return '00:00:00';
+    const totalSecs = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSecs / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  };
+
+  const isDailyClaimed = timeLeftMs > 0;
   const referralCode = user?.referralCode || 'PALM2026';
 
   const handleCopyCode = () => {
@@ -65,7 +105,6 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
     }
   };
 
-  const isDailyClaimed = user?.dailyClaimDate === new Date().toISOString().split('T')[0];
   const isSignupClaimed = user?.signupBonusClaimed ?? false;
 
   return (
@@ -143,16 +182,24 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
           </div>
         </div>
 
-        {/* Initiative 2: Daily Check-in Program (Daily Claim Bonus) */}
+        {/* Initiative 2: Daily Check-in Program (Daily Claim Bonus with 24h Countdown) */}
         <div className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/20 hover:border-amber-500/40 transition-all flex flex-col justify-between group specular-shine">
           <div>
             <div className="flex items-center justify-between">
               <div className="p-2.5 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-black shadow-md">
                 <CalendarCheck className="w-5 h-5" />
               </div>
-              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/30">
-                {isDailyClaimed ? 'CLAIMED TODAY' : 'AVAILABLE NOW'}
-              </span>
+              {isDailyClaimed ? (
+                <span className="text-[10px] font-black font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                  <Clock className="w-3 h-3 text-[#FFC107] animate-pulse" />
+                  NEXT IN {formatCountdown(timeLeftMs)}
+                </span>
+              ) : (
+                <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-[#00B875]" />
+                  AVAILABLE NOW
+                </span>
+              )}
             </div>
 
             <div className="mt-3">
@@ -161,7 +208,7 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
                 Daily Claim Bonus
               </div>
               <p className="text-xs text-purple-300/70 mt-1 leading-snug">
-                Check in every 24 hours to claim up to ₦2,500 cash rewards directly.
+                Check in every 24 hours to claim your ₦2,500 cash reward. Resets automatically after 24 hours.
               </p>
             </div>
           </div>
@@ -172,27 +219,37 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
                 {dailyClaimMsg}
               </p>
             )}
-            <button
-              onClick={handleDailyClaim}
-              disabled={claimingDaily || isDailyClaimed}
-              className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm ${
-                isDailyClaimed
-                  ? 'bg-white/10 text-slate-400 cursor-not-allowed border border-white/5'
-                  : 'bg-gradient-to-r from-amber-500 to-[#FFC107] text-black hover:opacity-95 active:scale-95 shadow-amber-500/20 cursor-pointer disabled:opacity-50'
-              }`}
-            >
-              {claimingDaily ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                  <span>Claiming Reward...</span>
-                </>
-              ) : (
-                <>
-                  <CalendarCheck className="w-4 h-4" />
-                  <span>{isDailyClaimed ? 'Claimed (Next at 00:00)' : 'Claim ₦2,500 Today'}</span>
-                </>
-              )}
-            </button>
+
+            {isDailyClaimed ? (
+              <div className="p-2.5 rounded-xl bg-black/60 border border-amber-500/30 text-center space-y-1">
+                <div className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center justify-center gap-1">
+                  <Clock className="w-3 h-3 text-amber-400 animate-spin" />
+                  <span>24-Hour Cooldown Active</span>
+                </div>
+                <div className="text-base sm:text-lg font-mono font-black text-[#FFC107] tracking-widest">
+                  {formatCountdown(timeLeftMs)}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDailyClaim}
+                disabled={claimingDaily}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 via-[#FFC107] to-amber-400 text-black hover:opacity-95 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-50"
+              >
+                {claimingDaily ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                    <span>Claiming Bonus...</span>
+                  </>
+                ) : (
+                  <>
+                    <CalendarCheck className="w-4 h-4 text-black" />
+                    <span>Claim ₦2,500 Daily Bonus</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

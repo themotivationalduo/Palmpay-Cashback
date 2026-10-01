@@ -1263,13 +1263,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user.dailyClaimTimestamp && now - Number(user.dailyClaimTimestamp) < ONE_24_HOURS) {
       return null;
     }
-    const today = new Date().toISOString().split('T')[0];
-    if (user.dailyClaimDate === today && !user.dailyClaimTimestamp) {
-      return null;
-    }
 
     const reward = 2500;
     const newBalance = (user.balance || 0) + reward;
+    const today = new Date().toISOString().split('T')[0];
     const updatedProfile: UserProfile = {
       ...user,
       balance: newBalance,
@@ -1332,6 +1329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('User not logged in');
     if (!receiptImage) throw new Error('Please upload your transaction receipt image.');
 
+    const txRef = 'PAYSTACK-' + Date.now();
     try {
       await addDoc(collection(db, 'code_orders'), {
         uid: user.uid,
@@ -1340,10 +1338,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         generatedCode: 'Pending Admin Approval',
         status: 'pending',
         paymentSource: 'paystack',
-        paymentReference: 'PAYSTACK-' + Date.now(),
+        paymentReference: txRef,
         receiptImage,
         createdAt: Date.now()
       });
+
+      const newTx: Transaction = {
+        id: 'tx-code-' + Date.now(),
+        uid: user.uid,
+        email: user.email,
+        title: 'CashBack Code Purchase (Paystack ₦8,550)',
+        amount: 8550,
+        type: 'debit',
+        category: 'code_purchase',
+        timestamp: Date.now(),
+        status: 'pending',
+        reference: txRef,
+        receiptImage
+      };
+      setTransactions((prev) => [newTx, ...prev]);
+      await addDoc(collection(db, 'transactions'), newTx);
 
       addNotification({
         title: 'CashBack Code Order Submitted ⌛',
@@ -1355,7 +1369,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           amount: 8550,
           status: 'pending',
           receiptImage,
-          reference: 'PAYSTACK-' + Date.now()
+          reference: txRef
         }
       });
     } catch (err) {
@@ -1449,15 +1463,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (user.uid) {
+        const txRef = 'MANUAL-' + Date.now();
         await addDoc(collection(db, 'code_orders'), {
           uid: user.uid,
           userEmail: user.email,
           codePrice: 8550,
           generatedCode: cleanCode,
           status: 'pending',
-          paymentReference: 'MANUAL-' + Date.now(),
+          paymentReference: txRef,
           createdAt: Date.now()
         });
+
+        const newTx: Transaction = {
+          id: 'tx-act-' + Date.now(),
+          uid: user.uid,
+          email: user.email,
+          title: `CashBack Code Submission (${cleanCode})`,
+          amount: 0,
+          type: 'credit',
+          category: 'code_purchase',
+          timestamp: Date.now(),
+          status: 'pending',
+          reference: txRef
+        };
+        setTransactions((prev) => [newTx, ...prev]);
+        await addDoc(collection(db, 'transactions'), newTx);
 
         addNotification({
           title: 'CashBack Code Submitted ⌛',
@@ -1481,21 +1511,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!docSnap.exists()) return;
 
       const orderData = docSnap.data() as CodeOrder;
-      
       const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
-      let finalCode = customCode;
+      
+      let finalCode = (customCode || '').trim();
+
+      // Ensure finalCode is valid and not 'Pending Admin Approval'
+      if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
+        if (orderData.generatedCode && !orderData.generatedCode.toLowerCase().includes('pending') && orderData.generatedCode.startsWith('palm_')) {
+          finalCode = orderData.generatedCode.trim();
+        }
+      }
 
       if (targetUserDoc.exists()) {
         const uData = targetUserDoc.data() as UserProfile;
-        finalCode = finalCode || uData.activeCashbackCode || generateRandomCashbackCode();
+        if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
+          if (uData.activeCashbackCode && !uData.activeCashbackCode.toLowerCase().includes('pending') && uData.activeCashbackCode.startsWith('palm_')) {
+            finalCode = uData.activeCashbackCode.trim();
+          }
+        }
+      }
+
+      // If still missing or invalid, generate a fresh code in palm_###_cash_### format!
+      if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
+        finalCode = generateRandomCashbackCode();
+      }
+
+      // Update target user document in Firestore
+      if (targetUserDoc.exists()) {
         await updateDoc(doc(db, 'users', orderData.uid), {
           hasActiveCode: true,
           activeCashbackCode: finalCode
         });
-      } else {
-        finalCode = finalCode || OFFICIAL_CASHBACK_CODE;
       }
 
+      // Update code_orders document in Firestore
       await updateDoc(docRef, {
         status: 'approved',
         generatedCode: finalCode,
@@ -1503,12 +1552,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         approvedAt: Date.now()
       });
 
-      if (user?.uid === orderData.uid) {
-        setUser((prev) => (prev ? {
-          ...prev,
+      // Update matching transaction in transactions collection if present
+      if (orderData.paymentReference) {
+        try {
+          const txQuery = query(collection(db, 'transactions'), where('reference', '==', orderData.paymentReference));
+          const txSnap = await getDocs(txQuery);
+          txSnap.forEach(async (tDoc) => {
+            await updateDoc(doc(db, 'transactions', tDoc.id), {
+              status: 'approved',
+              adminNote: customNote || 'CashBack Code Approved and Activated.'
+            });
+          });
+        } catch (e) {
+          console.warn('Tx update error:', e);
+        }
+      }
+
+      // Update local state if the currently logged-in user matches order recipient
+      if (user?.uid === orderData.uid || user?.email?.toLowerCase() === orderData.userEmail?.toLowerCase()) {
+        const updatedUser: UserProfile = {
+          ...user!,
           hasActiveCode: true,
           activeCashbackCode: finalCode
-        } : null));
+        };
+        setUser(updatedUser);
+        try {
+          sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updatedUser));
+          saveRegisteredUser(updatedUser);
+        } catch (e) {
+          console.warn('Storage sync note:', e);
+        }
       }
 
       addNotification({
@@ -1543,6 +1616,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         adminNote: reason || 'Order rejected by Admin.',
         rejectedAt: Date.now()
       });
+
+      // Update matching transaction in transactions collection if present
+      if (orderData.paymentReference) {
+        try {
+          const txQuery = query(collection(db, 'transactions'), where('reference', '==', orderData.paymentReference));
+          const txSnap = await getDocs(txQuery);
+          txSnap.forEach(async (tDoc) => {
+            await updateDoc(doc(db, 'transactions', tDoc.id), {
+              status: 'rejected',
+              adminNote: reason || 'Order rejected by Admin.'
+            });
+          });
+        } catch (e) {
+          console.warn('Tx reject error:', e);
+        }
+      }
 
       // Refund if deposit balance was used
       if (orderData.paymentSource === 'deposit_balance') {
@@ -1717,20 +1806,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanCode = (details.cashbackCode || '').trim();
     if (!cleanCode) {
       throw new Error(
-        'CashBack Code required. You must enter the verified CashBack Code assigned to your account upon purchase before you can withdraw funds.'
+        'CashBack Code required. Please enter the verified CashBack Code assigned to your account.'
       );
     }
 
-    if (!user.hasActiveCode || !user.activeCashbackCode) {
+    if (!user.hasActiveCode || !user.activeCashbackCode || user.activeCashbackCode.toLowerCase().includes('pending')) {
       throw new Error(
-        'Your account does not have an active CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.'
+        'Your account does not have an active approved CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.'
       );
     }
 
     if (cleanCode.toLowerCase() !== user.activeCashbackCode.toLowerCase()) {
       throw new Error(
-        'Invalid CashBack Code. The code you entered is invalid or does not match the authorized code assigned to your account. Please verify your purchased CashBack Code and try again.'
+        `Invalid CashBack Code. The code entered ('${cleanCode}') is not assigned to your account or does not match your active approved CashBack Code.`
       );
+    }
+
+    // Verify this code is not registered to another user account
+    try {
+      const usersRef = collection(db, 'users');
+      const usersSnap = await getDocs(usersRef);
+      let belongsToAnotherUser = false;
+
+      usersSnap.forEach((uDoc) => {
+        const u = uDoc.data() as UserProfile;
+        if (u.uid !== user.uid && u.activeCashbackCode && u.activeCashbackCode.trim().toLowerCase() === cleanCode.toLowerCase()) {
+          belongsToAnotherUser = true;
+        }
+      });
+
+      if (belongsToAnotherUser) {
+        throw new Error(
+          'Invalid CashBack Code. The entered CashBack Code belongs to another account and cannot be used for withdrawals on this account.'
+        );
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes('Invalid CashBack Code')) {
+        throw err;
+      }
+      console.warn('Withdrawal code ownership check note:', err);
     }
 
     const isDeposit = details.balanceSource === 'deposit';

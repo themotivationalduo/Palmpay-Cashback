@@ -1,4 +1,16 @@
-export type NavigationPage = 'dashboard' | 'game' | 'code' | 'transactions' | 'admin' | 'profile';
+export type NavigationPage = 
+  | 'dashboard' 
+  | 'game' 
+  | 'code' 
+  | 'transactions' 
+  | 'admin' 
+  | 'profile' 
+  | 'withdraw' 
+  | 'buy-code' 
+  | 'add-money' 
+  | 'verification' 
+  | 'community' 
+  | 'support';
 
 export interface UserProfile {
   uid: string;

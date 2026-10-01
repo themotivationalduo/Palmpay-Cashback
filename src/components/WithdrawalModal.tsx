@@ -17,7 +17,9 @@ import {
   X,
   Clock,
   Zap,
-  UserCheck
+  UserCheck,
+  XCircle,
+  Search
 } from 'lucide-react';
 import { useAuth, OFFICIAL_CASHBACK_CODE } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -27,11 +29,13 @@ interface WithdrawalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenBuyCode?: () => void;
+  isStandalone?: boolean;
 }
 
 export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   isOpen,
-  onClose
+  onClose,
+  isStandalone = false
 }) => {
   const { user, requestWithdrawal } = useAuth();
   const { triggerCelebration } = useCelebration();
@@ -43,6 +47,116 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   const [accountName, setAccountName] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
   const [enteredCode, setEnteredCode] = useState('');
+  
+  // Cashback Code real-time validation state
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [codeProgressStep, setCodeProgressStep] = useState<number>(0); // 0 = idle, 1 = format, 2 = DB registry, 3 = assignment/complete
+  const [codeValidationResult, setCodeValidationResult] = useState<{
+    formatOk: boolean | null;
+    existsOk: boolean | null;
+    assignedOk: boolean | null;
+    message: string | null;
+    isValid: boolean | null;
+  }>({
+    formatOk: null,
+    existsOk: null,
+    assignedOk: null,
+    message: null,
+    isValid: null
+  });
+
+  const codeValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Real-time Cashback Code Validation Handler
+  const handleCodeChange = (rawVal: string) => {
+    setEnteredCode(rawVal);
+    setError(null);
+
+    if (codeValidationTimeoutRef.current) {
+      clearTimeout(codeValidationTimeoutRef.current);
+    }
+
+    const cleanCode = rawVal.trim().toLowerCase();
+    if (!cleanCode) {
+      setIsValidatingCode(false);
+      setCodeProgressStep(0);
+      setCodeValidationResult({
+        formatOk: null,
+        existsOk: null,
+        assignedOk: null,
+        message: null,
+        isValid: null
+      });
+      return;
+    }
+
+    setIsValidatingCode(true);
+    setCodeProgressStep(1); // Step 1: Format Check
+
+    codeValidationTimeoutRef.current = setTimeout(() => {
+      // 1. Format Syntax Check: pattern palm_... or palm_###_cash_### with length >= 8
+      const isFormatValid = cleanCode.startsWith('palm_') && cleanCode.length >= 8;
+      
+      setCodeProgressStep(2); // Step 2: Database Registry Lookup
+
+      setTimeout(() => {
+        // 2. Existence Check in System
+        const activeUserCode = (user?.activeCashbackCode || '').trim().toLowerCase();
+        const userHasActiveCode = Boolean(user?.hasActiveCode);
+        const codeIsPending = activeUserCode.includes('pending');
+
+        const codeMatchesUser = isFormatValid && (cleanCode === activeUserCode);
+
+        setCodeProgressStep(3); // Step 3: Account Ownership & Clearance Check
+
+        setTimeout(() => {
+          setIsValidatingCode(false);
+
+          if (!isFormatValid) {
+            setCodeValidationResult({
+              formatOk: false,
+              existsOk: false,
+              assignedOk: false,
+              message: 'Invalid code format. Expected syntax: palm_###_cash_###',
+              isValid: false
+            });
+          } else if (codeIsPending && codeMatchesUser) {
+            setCodeValidationResult({
+              formatOk: true,
+              existsOk: true,
+              assignedOk: false,
+              message: 'Code recognized in system but is Pending Admin Approval on Control Panel.',
+              isValid: false
+            });
+          } else if (!userHasActiveCode || !activeUserCode || codeIsPending) {
+            setCodeValidationResult({
+              formatOk: true,
+              existsOk: true,
+              assignedOk: false,
+              message: 'Your account does not have an active approved CashBack Code yet. Please purchase one first.',
+              isValid: false
+            });
+          } else if (!codeMatchesUser) {
+            setCodeValidationResult({
+              formatOk: true,
+              existsOk: false,
+              assignedOk: false,
+              message: `Code '${rawVal}' is not assigned to your account or belongs to another user.`,
+              isValid: false
+            });
+          } else {
+            setCodeValidationResult({
+              formatOk: true,
+              existsOk: true,
+              assignedOk: true,
+              message: 'CashBack Code verified & active on your account!',
+              isValid: true
+            });
+          }
+        }, 150);
+      }, 200);
+    }, 250);
+  };
   
   // Paystack verification state
   const [isResolving, setIsResolving] = useState(false);
@@ -61,29 +175,20 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
   const resolveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initial user default check
-  useEffect(() => {
-    if (isOpen) {
-      const defaultAcc = user?.accountNumber || (user?.phone ? user.phone.replace(/\D/g, '').slice(-10) : '');
-      if (defaultAcc && !accountNumber) {
-        setAccountNumber(defaultAcc);
-        handleAutoResolve(defaultAcc);
-      }
-    }
-  }, [isOpen, user?.accountNumber, user?.phone]);
-
   // Automatic Paystack Name Resolution function
   const handleAutoResolve = async (num: string) => {
     const cleanNumber = num.replace(/\D/g, '');
     if (cleanNumber.length < 10) {
       setIsResolved(false);
       setResolvedStatus(null);
+      setAccountName('');
       return;
     }
 
     setIsResolving(true);
     setIsResolved(false);
-    setResolvedStatus('Resolving PalmPay Account with Paystack...');
+    setResolvedStatus('Resolving Account...');
+    setError(null);
 
     try {
       const result = await resolvePaystackAccount(cleanNumber, '999991');
@@ -91,19 +196,18 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         setAccountName(result.accountName);
         setIsResolved(true);
         setResolvedStatus(result.verifiedBy || 'Paystack Verified');
+        setError(null);
       } else {
-        if (!accountName && user?.displayName) {
-          setAccountName(user.displayName);
-        }
-        setIsResolved(true);
-        setResolvedStatus('PalmPay NUBAN Account Validated');
+        setAccountName('');
+        setIsResolved(false);
+        setResolvedStatus(null);
+        setError('account not found, insert correct account number');
       }
     } catch {
-      if (!accountName && user?.displayName) {
-        setAccountName(user.displayName);
-      }
-      setIsResolved(true);
-      setResolvedStatus('PalmPay Account Active');
+      setAccountName('');
+      setIsResolved(false);
+      setResolvedStatus(null);
+      setError('account not found, insert correct account number');
     } finally {
       setIsResolving(false);
     }
@@ -181,6 +285,11 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       return;
     }
 
+    if (!accountName || !isResolved) {
+      setError('account not found, insert correct account number');
+      return;
+    }
+
     const numAmount = Number(amount);
     if (!numAmount || numAmount <= 0) {
       setError('Please enter a valid withdrawal amount.');
@@ -201,13 +310,13 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       return;
     }
 
-    if (!user?.hasActiveCode || !user?.activeCashbackCode) {
-      setError('Your account does not have an active CashBack Code. Please purchase a CashBack Code first from the dashboard / buy modal and wait for Admin approval before attempting to withdraw.');
+    if (!user?.hasActiveCode || !user?.activeCashbackCode || user.activeCashbackCode.toLowerCase().includes('pending')) {
+      setError('Your account does not have an active approved CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.');
       return;
     }
 
     if (cleanCode !== user.activeCashbackCode.toLowerCase()) {
-      setError('Invalid CashBack Code. The code you entered is incorrect. Please verify and insert your correct authorized CashBack Code, or proceed to purchase a new unique code if you do not have one.');
+      setError(`Invalid CashBack Code. The code entered ('${enteredCode}') is not assigned to your account or does not match your active approved CashBack Code.`);
       return;
     }
 
@@ -259,12 +368,28 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-8">
-        
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
+  if (!isOpen && !isStandalone) return null;
+
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-5 sm:p-7 border border-purple-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.85)] relative my-2 sm:my-4">
+      {/* Glow */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/20 rounded-full blur-2xl pointer-events-none" />
+
+      {/* Top Standalone Navigation Bar */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3.5 border-b border-purple-500/20 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 hover:text-white text-xs font-bold transition-all border border-purple-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-[#FFC107] bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+            Instant Direct Payout
+          </span>
+        </div>
+      )}
 
         {/* WITHDRAWAL FORM */}
         {step === 'form' && (
@@ -451,11 +576,152 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                 <input
                   type="text"
                   value={enteredCode}
-                  onChange={(e) => setEnteredCode(e.target.value)}
-                  placeholder="Type your purchased CashBack Code manually"
-                  className="w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] text-center"
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  placeholder="Type your purchased CashBack Code (palm_###_cash_###)"
+                  className={`w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border focus:outline-none text-center transition-colors ${
+                    isValidatingCode ? 'border-amber-500/60 focus:border-amber-400' :
+                    codeValidationResult.isValid ? 'border-emerald-500/60 focus:border-emerald-400' :
+                    codeValidationResult.isValid === false ? 'border-red-500/60 focus:border-red-400' :
+                    'border-white/15 focus:border-[#7E1DC6]'
+                  }`}
                   required
                 />
+
+                {/* REAL-TIME VALIDATION PROGRESS INDICATOR */}
+                {enteredCode.trim() !== '' && (
+                  <div className="mt-3 p-3.5 rounded-2xl bg-[#0d121d] border border-purple-500/30 shadow-lg animate-in fade-in slide-in-from-top-2">
+                    {/* Header & Status Badge */}
+                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className={`w-4 h-4 ${
+                          isValidatingCode ? 'text-amber-400 animate-pulse' :
+                          codeValidationResult.isValid ? 'text-emerald-400' : 'text-red-400'
+                        }`} />
+                        <span className="text-xs font-bold text-white">Validation Progress</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        {isValidatingCode ? (
+                          <span className="text-[10px] font-extrabold text-amber-400 flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                            Validating ({codeProgressStep === 1 ? '33%' : codeProgressStep === 2 ? '66%' : '90%'})
+                          </span>
+                        ) : codeValidationResult.isValid ? (
+                          <span className="text-[10px] font-extrabold text-[#00B875] bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> VERIFIED (100%)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-extrabold text-red-400 bg-red-500/20 border border-red-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <XCircle className="w-3 h-3" /> UNVERIFIED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Animated Progress Bar */}
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-3 relative">
+                      <div 
+                        className={`h-full transition-all duration-300 ease-out rounded-full ${
+                          isValidatingCode ? 'bg-gradient-to-r from-amber-500 to-purple-500 animate-pulse' :
+                          codeValidationResult.isValid ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-gradient-to-r from-red-500 to-rose-600'
+                        }`}
+                        style={{
+                          width: isValidatingCode 
+                            ? `${codeProgressStep * 33}%` 
+                            : codeValidationResult.isValid ? '100%' : '100%'
+                        }}
+                      />
+                    </div>
+
+                    {/* 3 Validation Steps */}
+                    <div className="space-y-1.5 text-[11px]">
+                      {/* Step 1: Format Syntax */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          1. Format Syntax (palm_###_cash_###):
+                        </span>
+                        {isValidatingCode && codeProgressStep < 1 ? (
+                          <span className="text-slate-500 text-[10px]">Waiting...</span>
+                        ) : isValidatingCode && codeProgressStep === 1 ? (
+                          <span className="text-amber-400 font-bold text-[10px] flex items-center gap-1">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Checking
+                          </span>
+                        ) : codeValidationResult.formatOk ? (
+                          <span className="text-emerald-400 font-bold text-[10px] flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-400" /> Valid Format
+                          </span>
+                        ) : (
+                          <span className="text-red-400 font-bold text-[10px] flex items-center gap-1">
+                            <XCircle className="w-3 h-3 text-red-400" /> Format Mismatch
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Step 2: Database Registry */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          2. Database Registry Check:
+                        </span>
+                        {isValidatingCode && codeProgressStep < 2 ? (
+                          <span className="text-slate-500 text-[10px]">Waiting...</span>
+                        ) : isValidatingCode && codeProgressStep === 2 ? (
+                          <span className="text-amber-400 font-bold text-[10px] flex items-center gap-1">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Querying DB
+                          </span>
+                        ) : codeValidationResult.existsOk ? (
+                          <span className="text-emerald-400 font-bold text-[10px] flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-400" /> Found in Registry
+                          </span>
+                        ) : (
+                          <span className="text-red-400 font-bold text-[10px] flex items-center gap-1">
+                            <XCircle className="w-3 h-3 text-red-400" /> Not Found
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Step 3: Account Ownership & Approval */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                          3. Account Assignment & Approval:
+                        </span>
+                        {isValidatingCode && codeProgressStep < 3 ? (
+                          <span className="text-slate-500 text-[10px]">Waiting...</span>
+                        ) : isValidatingCode && codeProgressStep === 3 ? (
+                          <span className="text-amber-400 font-bold text-[10px] flex items-center gap-1">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Verifying User
+                          </span>
+                        ) : codeValidationResult.assignedOk ? (
+                          <span className="text-emerald-400 font-bold text-[10px] flex items-center gap-1">
+                            <Check className="w-3 h-3 text-emerald-400" /> Assigned & Cleared
+                          </span>
+                        ) : (
+                          <span className="text-red-400 font-bold text-[10px] flex items-center gap-1">
+                            <XCircle className="w-3 h-3 text-red-400" /> Unassigned / Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Live Validation Result Banner */}
+                    {!isValidatingCode && codeValidationResult.message && (
+                      <div className={`mt-2.5 p-2 rounded-xl text-[11px] font-semibold flex items-center gap-2 border ${
+                        codeValidationResult.isValid 
+                          ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30' 
+                          : 'bg-red-950/40 text-red-300 border-red-500/30'
+                      }`}>
+                        {codeValidationResult.isValid ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                        )}
+                        <span>{codeValidationResult.message}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
 
@@ -664,6 +930,19 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         )}
 
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };

@@ -40,10 +40,6 @@ export const UserPersonalizationHeader: React.FC = () => {
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             Member since: {user?.memberSince || '29 September 2026'}
           </span>
-          <span className="text-slate-600 hidden sm:inline">•</span>
-          <span className="inline-flex items-center gap-1 text-[#FFC107] font-mono bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/25 text-xs">
-            PalmPay Acc: <strong className="text-white font-bold">{user?.accountNumber || user?.phone || '8012345678'}</strong>
-          </span>
         </p>
       </div>
 

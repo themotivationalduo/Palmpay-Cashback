@@ -6,18 +6,20 @@ interface VerificationNotificationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProceedToWithdraw?: () => void;
+  isStandalone?: boolean;
 }
 
 export const VerificationNotificationModal: React.FC<VerificationNotificationModalProps> = ({
   isOpen,
   onClose,
-  onProceedToWithdraw
+  onProceedToWithdraw,
+  isStandalone = false
 }) => {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [revealCode, setRevealCode] = useState(false);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isStandalone) return null;
 
   const hasApprovedCode = user?.hasActiveCode && user?.activeCashbackCode;
   const rawCode = hasApprovedCode ? user.activeCashbackCode! : '';
@@ -32,12 +34,26 @@ export const VerificationNotificationModal: React.FC<VerificationNotificationMod
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-md w-full rounded-3xl p-6 sm:p-7 border border-purple-500/35 shadow-[0_25px_70px_rgba(10,4,20,0.9)] relative my-8">
-        
-        {/* Glow */}
-        <div className="absolute top-0 right-0 w-44 h-44 bg-purple-600/25 rounded-full blur-3xl pointer-events-none" />
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-6 sm:p-7 border border-purple-500/35 shadow-[0_25px_70px_rgba(10,4,20,0.9)] relative my-2 sm:my-4">
+      {/* Glow */}
+      <div className="absolute top-0 right-0 w-44 h-44 bg-purple-600/25 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Standalone Back Navigation Header */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3.5 border-b border-purple-500/20 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 hover:text-white text-xs font-bold transition-all border border-purple-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-[#00B875] bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+            Clearance Verification
+          </span>
+        </div>
+      )}
 
         {/* Close Button */}
         <button
@@ -153,6 +169,19 @@ export const VerificationNotificationModal: React.FC<VerificationNotificationMod
         )}
 
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };

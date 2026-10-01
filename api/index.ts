@@ -171,7 +171,61 @@ app.get('/api/paystack/banks', async (_req: Request, res: Response) => {
   }
 });
 
-// 2. Resolve Account Name using Paystack API
+// Helper to look up account holder name from Site B database if Paystack cannot verify
+async function resolveAccountFromSiteB(accountNumber: string) {
+  const cleanAcc = String(accountNumber || '').trim().replace(/\D/g, '');
+  if (!cleanAcc || !db) return null;
+
+  try {
+    const usersRef = collection(db, 'users');
+    const usersSnap = await getDocs(usersRef);
+
+    let foundName: string | null = null;
+    let foundEmail: string | null = null;
+
+    usersSnap.forEach((docSnap) => {
+      if (foundName) return;
+      const u = docSnap.data();
+      const uAccClean = String(u.accountNumber || u.account_number || '').trim().replace(/\D/g, '');
+      const uPhoneClean = String(u.phone || '').trim().replace(/\D/g, '');
+
+      const accMatch = Boolean(
+        uAccClean && (
+          uAccClean === cleanAcc ||
+          (uAccClean.length >= 10 && cleanAcc.length >= 10 && uAccClean.slice(-10) === cleanAcc.slice(-10))
+        )
+      );
+
+      const phoneMatch = Boolean(
+        uPhoneClean && (
+          uPhoneClean === cleanAcc ||
+          (uPhoneClean.length >= 10 && cleanAcc.length >= 10 && uPhoneClean.slice(-10) === cleanAcc.slice(-10))
+        )
+      );
+
+      if (accMatch || phoneMatch) {
+        foundName = u.displayName || u.userName || u.fullName || u.name || (u.email ? u.email.split('@')[0] : null);
+        foundEmail = u.email || null;
+      }
+    });
+
+    if (foundName) {
+      return {
+        account_name: foundName,
+        account_number: cleanAcc,
+        email: foundEmail,
+        verified_by: 'Site B Account Verified',
+        source: 'Site B Database'
+      };
+    }
+  } catch (err) {
+    console.warn('[Site B Account Lookup Error]:', err);
+  }
+
+  return null;
+}
+
+// 2. Resolve Account Name using Paystack API with Site B Fallback
 app.get('/api/paystack/resolve', async (req: Request, res: Response) => {
   const accountNumber = (req.query.account_number as string || '').trim().replace(/\D/g, '');
   let cleanBankCode = (req.query.bank_code as string || '').trim();
@@ -217,27 +271,68 @@ app.get('/api/paystack/resolve', async (req: Request, res: Response) => {
         }
       });
     } else {
-      // If live Paystack account resolution returns custom message, provide clean resolution fallback
-      return res.json({
-        status: true,
-        data: {
-          account_number: accountNumber,
-          account_name: `PalmPay User (${accountNumber})`,
-          verified_by: 'PalmPay NUBAN Verified'
-        }
+      // Paystack could not verify account - query Site B database automatically!
+      const siteBMatch = await resolveAccountFromSiteB(accountNumber);
+      if (siteBMatch) {
+        return res.json({
+          status: true,
+          data: {
+            account_number: accountNumber,
+            account_name: siteBMatch.account_name,
+            verified_by: 'Site B Account Verified',
+            source: 'Site B Database'
+          }
+        });
+      }
+
+      return res.status(404).json({
+        status: false,
+        message: 'account not found, insert correct account number'
       });
     }
   } catch (error: any) {
     console.error('[Paystack Resolve Error]:', error);
-    return res.json({
-      status: true,
-      data: {
-        account_number: accountNumber,
-        account_name: `PalmPay User (${accountNumber})`,
-        verified_by: 'PalmPay NUBAN Verified'
-      }
+    const siteBMatch = await resolveAccountFromSiteB(accountNumber);
+    if (siteBMatch) {
+      return res.json({
+        status: true,
+        data: {
+          account_number: accountNumber,
+          account_name: siteBMatch.account_name,
+          verified_by: 'Site B Account Verified',
+          source: 'Site B Database'
+        }
+      });
+    }
+
+    return res.status(404).json({
+      status: false,
+      message: 'account not found, insert correct account number'
     });
   }
+});
+
+// Dedicated Site B account lookup endpoint
+app.get('/api/site-b/resolve-account', async (req: Request, res: Response) => {
+  const accountNumber = (req.query.account_number as string || '').trim().replace(/\D/g, '');
+  if (!accountNumber) {
+    return res.status(400).json({ success: false, message: 'Account number required' });
+  }
+
+  const siteBMatch = await resolveAccountFromSiteB(accountNumber);
+  if (siteBMatch) {
+    return res.json({
+      success: true,
+      accountName: siteBMatch.account_name,
+      accountNumber: siteBMatch.account_number,
+      verifiedBy: 'Site B Account Verified'
+    });
+  }
+
+  return res.status(404).json({
+    success: false,
+    message: 'account not found, insert correct account number'
+  });
 });
 
 // Dynamic PalmPay Gateway Configuration (fallback to environment variables)

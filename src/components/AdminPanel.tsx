@@ -884,6 +884,14 @@ export const AdminPanel: React.FC = () => {
                           <span>Destination: <strong className="text-white">{req.bankName || 'PalmPay Wallet'}</strong></span>
                         </div>
 
+                        {/* User Inserted Cashback Code Display */}
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1.5 bg-purple-950/60 border border-purple-500/40 text-purple-200 text-xs px-2.5 py-1 rounded-xl font-mono font-bold">
+                            <KeyRound className="w-3.5 h-3.5 text-[#FFC107]" />
+                            <span>User Inserted Code: <strong className="text-[#FFC107] font-extrabold">{req.cashbackCode || 'None Inserted'}</strong></span>
+                          </span>
+                        </div>
+
                         {/* Attached Transaction Receipt Proof Indicator */}
                         {req.receiptImage && (
                           <div className="pt-1 flex items-center gap-2">
@@ -955,6 +963,7 @@ export const AdminPanel: React.FC = () => {
                                     accountNumber: req.accountNumber,
                                     bankName: req.bankName,
                                     reference: req.reference || req.id,
+                                    code: req.cashbackCode,
                                     customMessage: `Disbursed ₦${req.amount.toLocaleString()} to PalmPay account ${req.accountNumber} on Site B with zero error.`,
                                     isWarning: false
                                   });
@@ -986,6 +995,7 @@ export const AdminPanel: React.FC = () => {
                                     accountNumber: req.accountNumber,
                                     bankName: req.bankName,
                                     reference: req.reference || req.id,
+                                    code: req.cashbackCode,
                                     customMessage: 'Declined by Admin: Account verification mismatch. Funds have been reversed back to your balance.',
                                     isWarning: true
                                   });
@@ -1994,6 +2004,12 @@ export const AdminPanel: React.FC = () => {
                 <div className="flex justify-between items-center text-slate-300">
                   <span>PalmPay Account:</span>
                   <span className="text-[#FFC107] font-bold">{actionPrompt.accountNumber}</span>
+                </div>
+              )}
+              {actionPrompt.code && (
+                <div className="flex justify-between items-center text-slate-300">
+                  <span>User Inserted Code:</span>
+                  <span className="text-[#FFC107] font-extrabold">{actionPrompt.code}</span>
                 </div>
               )}
               {actionPrompt.reference && (

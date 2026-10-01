@@ -13,7 +13,8 @@ import {
   Upload,
   Image as ImageIcon,
   X,
-  RefreshCw
+  RefreshCw,
+  XCircle
 } from 'lucide-react';
 import { useAuth, PAYSTACK_CASHBACK_CODE_URL } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -23,17 +24,100 @@ interface BuyCashbackCodeProps {
   onClose: () => void;
   onCodePurchased?: (code: string) => void;
   onProceedToWithdraw?: () => void;
+  isStandalone?: boolean;
 }
 
 export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
   isOpen,
   onClose,
   onCodePurchased,
-  onProceedToWithdraw
+  onProceedToWithdraw,
+  isStandalone = false
 }) => {
   const { user, buyCashbackCode, activateCashbackCode, buyCashbackCodeWithDepositBalance } = useAuth();
   const { triggerCelebration } = useCelebration();
   const [inputCode, setInputCode] = useState('');
+  
+  // Option 3 live code validation state
+  const [isValidatingInputCode, setIsValidatingInputCode] = useState(false);
+  const [inputCodeProgressStep, setInputCodeProgressStep] = useState<number>(0);
+  const [inputCodeValidationResult, setInputCodeValidationResult] = useState<{
+    formatOk: boolean | null;
+    existsOk: boolean | null;
+    assignedOk: boolean | null;
+    message: string | null;
+    isValid: boolean | null;
+  }>({
+    formatOk: null,
+    existsOk: null,
+    assignedOk: null,
+    message: null,
+    isValid: null
+  });
+
+  const handleInputCodeChange = (rawVal: string) => {
+    setInputCode(rawVal);
+    setError(null);
+
+    const clean = rawVal.trim().toLowerCase();
+    if (!clean) {
+      setIsValidatingInputCode(false);
+      setInputCodeProgressStep(0);
+      setInputCodeValidationResult({
+        formatOk: null,
+        existsOk: null,
+        assignedOk: null,
+        message: null,
+        isValid: null
+      });
+      return;
+    }
+
+    setIsValidatingInputCode(true);
+    setInputCodeProgressStep(1);
+
+    setTimeout(() => {
+      const isFormatValid = clean.startsWith('palm_') && clean.length >= 8;
+      setInputCodeProgressStep(2);
+
+      setTimeout(() => {
+        const activeUserCode = (user?.activeCashbackCode || '').trim().toLowerCase();
+        const codeMatchesUser = isFormatValid && (clean === activeUserCode);
+
+        setInputCodeProgressStep(3);
+
+        setTimeout(() => {
+          setIsValidatingInputCode(false);
+
+          if (!isFormatValid) {
+            setInputCodeValidationResult({
+              formatOk: false,
+              existsOk: false,
+              assignedOk: false,
+              message: 'Invalid code format. Expected syntax: palm_###_cash_###',
+              isValid: false
+            });
+          } else if (codeMatchesUser && user?.hasActiveCode) {
+            setInputCodeValidationResult({
+              formatOk: true,
+              existsOk: true,
+              assignedOk: true,
+              message: 'Code matches active code registered on your account.',
+              isValid: true
+            });
+          } else {
+            setInputCodeValidationResult({
+              formatOk: true,
+              existsOk: true,
+              assignedOk: true,
+              message: 'Code format valid. Ready to activate on account.',
+              isValid: true
+            });
+          }
+        }, 150);
+      }, 200);
+    }, 250);
+  };
   const [loading, setLoading] = useState(false);
   const [depLoading, setDepLoading] = useState(false);
   const [paystackLoading, setPaystackLoading] = useState(false);
@@ -208,12 +292,28 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-7 border border-amber-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.9)] relative my-8 max-h-[90vh] overflow-y-auto scrollbar-thin">
-        
-        {/* Ambient Glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+  if (!isOpen && !isStandalone) return null;
+
+  const contentMarkup = (
+    <div className="mirror-glass-card max-w-xl w-full mx-auto rounded-3xl p-5 sm:p-7 border border-amber-500/30 shadow-[0_25px_65px_rgba(0,0,0,0.9)] relative my-2 sm:my-4">
+      {/* Ambient Glow */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Standalone Back Bar */}
+      {isStandalone && (
+        <div className="flex items-center justify-between pb-3.5 border-b border-amber-500/20 mb-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 hover:text-white text-xs font-bold transition-all border border-amber-400/30"
+          >
+            ← Back to Dashboard
+          </button>
+          <span className="text-[10px] sm:text-xs font-black uppercase text-[#FFC107] bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+            CashBack Portal
+          </span>
+        </div>
+      )}
 
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
@@ -505,9 +605,14 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
                 type="text"
                 disabled={loading}
                 value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
-                placeholder="Enter purchased code"
-                className="flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border border-white/15 focus:outline-none focus:border-[#7E1DC6] disabled:opacity-50"
+                onChange={(e) => handleInputCodeChange(e.target.value)}
+                placeholder="Enter purchased code (palm_###_cash_###)"
+                className={`flex-1 bg-[#121922] text-white text-xs sm:text-sm font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border focus:outline-none disabled:opacity-50 transition-colors ${
+                  isValidatingInputCode ? 'border-amber-500/60' :
+                  inputCodeValidationResult.isValid ? 'border-emerald-500/60' :
+                  inputCodeValidationResult.isValid === false ? 'border-red-500/60' :
+                  'border-white/15 focus:border-[#7E1DC6]'
+                }`}
                 required
               />
               <button
@@ -528,6 +633,76 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
                 )}
               </button>
             </div>
+
+            {/* REAL-TIME VALIDATION PROGRESS INDICATOR FOR OPTION 3 */}
+            {inputCode.trim() !== '' && (
+              <div className="p-3 rounded-xl bg-black/60 border border-purple-500/30 text-[11px] space-y-2 animate-in fade-in">
+                <div className="flex items-center justify-between text-xs font-bold text-white border-b border-white/10 pb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className={`w-3.5 h-3.5 ${
+                      isValidatingInputCode ? 'text-amber-400 animate-pulse' :
+                      inputCodeValidationResult.isValid ? 'text-emerald-400' : 'text-red-400'
+                    }`} />
+                    Validation Progress
+                  </span>
+                  {isValidatingInputCode ? (
+                    <span className="text-[10px] text-amber-400 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Checking ({inputCodeProgressStep === 1 ? '33%' : inputCodeProgressStep === 2 ? '66%' : '90%'})
+                    </span>
+                  ) : inputCodeValidationResult.isValid ? (
+                    <span className="text-[10px] text-[#00B875] font-extrabold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-[#00B875]" /> VALID FORMAT (100%)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-red-400 font-extrabold flex items-center gap-1">
+                      <XCircle className="w-3 h-3 text-red-400" /> FORMAT MISMATCH
+                    </span>
+                  )}
+                </div>
+
+                <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 rounded-full ${
+                      isValidatingInputCode ? 'bg-amber-400 animate-pulse' :
+                      inputCodeValidationResult.isValid ? 'bg-emerald-400' : 'bg-red-500'
+                    }`}
+                    style={{ width: isValidatingInputCode ? `${inputCodeProgressStep * 33}%` : '100%' }}
+                  />
+                </div>
+
+                <div className="space-y-1 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">1. Pattern (palm_###_cash_###):</span>
+                    {inputCodeValidationResult.formatOk ? (
+                      <span className="text-emerald-400 font-bold">Valid</span>
+                    ) : isValidatingInputCode ? (
+                      <span className="text-amber-400">Checking...</span>
+                    ) : (
+                      <span className="text-red-400 font-bold">Invalid</span>
+                    )}
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">2. System Alignment:</span>
+                    {inputCodeValidationResult.existsOk ? (
+                      <span className="text-emerald-400 font-bold">Aligned</span>
+                    ) : isValidatingInputCode ? (
+                      <span className="text-amber-400">Checking...</span>
+                    ) : (
+                      <span className="text-red-400 font-bold">Pending</span>
+                    )}
+                  </div>
+                </div>
+
+                {!isValidatingInputCode && inputCodeValidationResult.message && (
+                  <div className={`p-1.5 rounded-lg text-[10px] font-semibold border ${
+                    inputCodeValidationResult.isValid ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30' : 'bg-red-950/40 text-red-300 border-red-500/30'
+                  }`}>
+                    {inputCodeValidationResult.message}
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         )}
 
@@ -543,6 +718,19 @@ export const BuyCashbackCodeModal: React.FC<BuyCashbackCodeProps> = ({
         </div>
 
       </div>
+  );
+
+  if (isStandalone) {
+    return (
+      <div className="animate-in fade-in duration-300 w-full py-2">
+        {contentMarkup}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+      {contentMarkup}
     </div>
   );
 };

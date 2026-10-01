@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, ArrowDownLeft, ArrowUpRight, Search, ChevronRight, CheckCircle2, Clock, X, ShieldAlert } from 'lucide-react';
+import { History, ArrowDownLeft, ArrowUpRight, Search, ChevronRight, CheckCircle2, Clock, X, ShieldAlert, Sparkles, KeyRound, Gamepad2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface TransactionsLedgerProps {
@@ -298,9 +298,20 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-[#00B875] transition-colors truncate">
-                      {tx.title}
-                    </h4>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-xs sm:text-sm font-bold text-white group-hover:text-[#00B875] transition-colors truncate">
+                        {tx.title}
+                      </h4>
+                      <span className="text-[9px] px-2 py-0.5 rounded-md font-extrabold uppercase tracking-wider shrink-0 bg-purple-950/70 text-purple-300 border border-purple-500/30">
+                        {tx.category === 'deposit' ? 'Deposit' :
+                         tx.category === 'withdrawal' ? 'Withdrawal' :
+                         tx.category === 'code_purchase' ? 'CashBack Code' :
+                         tx.category.includes('game') ? 'Game Play' :
+                         tx.category === 'welcome_bonus' ? 'Welcome Bonus' :
+                         tx.category === 'daily_claim' ? 'Daily Check-in' :
+                         tx.category}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
                       <span className="shrink-0">{formatTimestamp(tx.timestamp)}</span>
                       <span>•</span>
@@ -311,27 +322,31 @@ export const TransactionsLedger: React.FC<TransactionsLedgerProps> = ({
                   </div>
                 </div>
 
-                {/* Right side amount & explicit status badge */}
+                {/* Right side amount & explicit color-coded status badge */}
                 <div className="text-right shrink-0 space-y-0.5 sm:space-y-1">
                   <div className={`text-xs sm:text-base font-extrabold font-mono ${amountColor}`}>
                     {amountPrefix}{tx.amount.toLocaleString()}
                   </div>
                   <div>
                     {tx.status === 'pending' ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse shadow-sm">
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40 animate-pulse shadow-sm">
                         <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#FFC107]" />
-                        <span className="hidden xs:inline">Pending</span>
-                        <span className="xs:hidden">Wait</span>
+                        <span>Pending</span>
                       </span>
-                    ) : tx.status === 'rejected' ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                    ) : ((tx.status as string) === 'rejected' || (tx.status as string) === 'failed' || (tx.status as string) === 'declined') ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 shadow-sm">
                         <X className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-rose-400" />
                         <span>Declined</span>
                       </span>
+                    ) : (tx.category === 'game_win' || tx.status === 'won') ? (
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-purple-500/20 text-amber-300 border border-purple-500/40 shadow-sm">
+                        <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-amber-300" />
+                        <span>Won</span>
+                      </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2 sm:px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 shadow-sm">
+                      <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40 shadow-sm">
                         <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#00B875]" />
-                        <span>Done</span>
+                        <span>Verified</span>
                       </span>
                     )}
                   </div>

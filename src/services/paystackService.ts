@@ -110,14 +110,14 @@ export async function resolvePaystackAccount(
     } else {
       return {
         success: false,
-        message: result?.message || 'Could not resolve account name with this bank.'
+        message: result?.message || 'account not found, insert correct account number'
       };
     }
   } catch (error: any) {
     console.warn('Account resolution error:', error);
     return {
       success: false,
-      message: error?.message || 'Network error communicating with resolution gateway.'
+      message: 'account not found, insert correct account number'
     };
   }
 }
