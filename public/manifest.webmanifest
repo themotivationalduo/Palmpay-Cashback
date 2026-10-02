@@ -1,0 +1,44 @@
+{
+  "id": "/",
+  "name": "PalmPay CashBack Vault",
+  "short_name": "PalmPay",
+  "description": "PalmPay CashBack & Reward Settlement App with Instant Withdrawals and Spin Games.",
+  "theme_color": "#0B0614",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "minimal-ui", "standalone", "browser"],
+  "orientation": "any",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/palmpay-icon-exact.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

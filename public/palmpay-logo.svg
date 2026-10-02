@@ -1,23 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="100%" height="100%">
-  <defs>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#7E1DC6" flood-opacity="0.3"/>
-    </filter>
-  </defs>
-
-  <!-- Official PalmPay Rounded Hexagon Base (Exact color #7E1DC6) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="512" height="512">
   <path d="M21.157 4.262a5.69 5.69 0 0 1 5.685 0l12.83 7.407a5.69 5.69 0 0 1 2.843 4.924v14.814a5.69 5.69 0 0 1-2.843 4.924l-12.83 7.407a5.69 5.69 0 0 1-5.685 0l-12.83-7.407a5.69 5.69 0 0 1-2.842-4.924V16.593a5.69 5.69 0 0 1 2.842-4.924z" 
-        fill="#7E1DC6"
-        filter="url(#glow)" />
-
-  <!-- Official PalmPay Intertwined White Geometric Loops -->
+        fill="#7512D6" />
   <g fill="none" stroke="#FFFFFF" stroke-width="4.3" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Upper-left loop cutting boundary up-right -->
     <path d="M5.565 29.88l17.44-17.441a1.263 1.263 0 0 1 1.766-.021l7.432 7.089" />
-    <!-- Lower-right loop cutting boundary down-left -->
     <path d="M42.435 18.12L25.007 36.051a1.263 1.263 0 0 1-1.766.021l-7.431-7.088" />
   </g>
-
-  <!-- Center Diamond Square Accent -->
   <rect width="5.053" height="5.053" x="21.473" y="21.473" fill="#FFFFFF" rx="0.632" ry="0.632" transform="rotate(-45 24 24)" />
 </svg>
