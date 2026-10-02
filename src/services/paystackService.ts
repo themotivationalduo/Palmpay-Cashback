@@ -95,17 +95,40 @@ export async function resolvePaystackAccount(
     };
   }
 
+  // 1. If PalmPay bank (or default code 999991), prioritize Site B account resolution
+  if (cleanCode === '999991' || cleanCode.toUpperCase() === 'PALMPAY') {
+    try {
+      const siteBUrl = `/api/site-b/resolve-account?account_number=${encodeURIComponent(cleanNumber)}`;
+      const siteBRes = await fetch(siteBUrl);
+      if (siteBRes.ok) {
+        const siteBData = await siteBRes.json();
+        const accountName = siteBData.accountName || siteBData.data?.account_name || siteBData.account_name;
+        if (accountName) {
+          return {
+            success: true,
+            accountName: accountName,
+            accountNumber: siteBData.accountNumber || cleanNumber,
+            verifiedBy: siteBData.verifiedBy || 'Site B Account Verified'
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Direct Site B resolve check:', e);
+    }
+  }
+
+  // 2. Query Paystack resolve endpoint (which also cascades to Site B internally)
   try {
     const url = `/api/paystack/resolve?account_number=${encodeURIComponent(cleanNumber)}&bank_code=${encodeURIComponent(cleanCode)}`;
     const response = await fetch(url);
     const result = await response.json();
 
-    if (result && result.status && result.data?.account_name) {
+    if (result && result.status && (result.data?.account_name || result.accountName)) {
       return {
         success: true,
-        accountName: result.data.account_name,
-        accountNumber: result.data.account_number || cleanNumber,
-        verifiedBy: result.data.verified_by || 'Site B Account Verified'
+        accountName: result.data?.account_name || result.accountName,
+        accountNumber: result.data?.account_number || result.accountNumber || cleanNumber,
+        verifiedBy: result.data?.verified_by || result.verifiedBy || 'Site B Account Verified'
       };
     } else {
       // If this is a valid 10 or 11 digit PalmPay account on Site B, guarantee resolution
@@ -139,4 +162,11 @@ export async function resolvePaystackAccount(
       message: 'account not found, insert correct account number'
     };
   }
+}
+
+/**
+ * Dedicated helper to query Site B user account name
+ */
+export async function resolveSiteBAccount(accountNumber: string): Promise<AccountResolutionResult> {
+  return resolvePaystackAccount(accountNumber, '999991');
 }

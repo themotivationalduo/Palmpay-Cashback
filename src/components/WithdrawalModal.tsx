@@ -343,7 +343,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         (userAccClean.length >= 10 && cleanNumber.length >= 10 && userAccClean.slice(-10) === cleanNumber.slice(-10)) ||
         (userPhoneClean.length >= 10 && cleanNumber.length >= 10 && userPhoneClean.slice(-10) === cleanNumber.slice(-10)))
     ) {
-      const matchName = user.displayName || user.fullName || 'PalmPay Verified User';
+      const matchName = user.displayName || 'PalmPay Verified User';
       setAccountName(matchName);
       setIsResolved(true);
       setResolvedStatus('Site B Account Verified');
@@ -351,6 +351,33 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       setIsResolving(false);
       return;
     }
+
+    // Check local registered accounts registry for Site B users
+    try {
+      const storedRegistry = localStorage.getItem('palmpay_accounts_registry_v3');
+      if (storedRegistry) {
+        const parsed = JSON.parse(storedRegistry);
+        for (const emailKey of Object.keys(parsed)) {
+          const profile = parsed[emailKey]?.profile;
+          if (profile) {
+            const pAcc = String(profile.accountNumber || '').replace(/\D/g, '');
+            const pPhone = String(profile.phone || '').replace(/\D/g, '');
+            if (
+              (pAcc && (pAcc === cleanNumber || (pAcc.length >= 10 && pAcc.slice(-10) === cleanNumber.slice(-10)))) ||
+              (pPhone && (pPhone === cleanNumber || (pPhone.length >= 10 && pPhone.slice(-10) === cleanNumber.slice(-10))))
+            ) {
+              const matchedName = profile.displayName || profile.name || emailKey.split('@')[0];
+              setAccountName(matchedName);
+              setIsResolved(true);
+              setResolvedStatus('Site B Account Verified');
+              setError(null);
+              setIsResolving(false);
+              return;
+            }
+          }
+        }
+      }
+    } catch {}
 
     try {
       const result = await resolvePaystackAccount(cleanNumber, '999991');

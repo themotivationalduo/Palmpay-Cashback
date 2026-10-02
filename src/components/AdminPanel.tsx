@@ -56,6 +56,7 @@ export const AdminPanel: React.FC = () => {
     user, 
     updateBalance, 
     purgeAllRecords, 
+    deleteUserPermanently,
     approveDepositRequest, 
     rejectDepositRequest, 
     approveWithdrawalRequest,
@@ -78,6 +79,11 @@ export const AdminPanel: React.FC = () => {
   const [purgeSuccess, setPurgeSuccess] = useState<boolean>(false);
   const [approvingWithdrawalId, setApprovingWithdrawalId] = useState<string | null>(null);
   const [withdrawalAlert, setWithdrawalAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // User Deletion state
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState<boolean>(false);
+  const [deleteUserFeedback, setDeleteUserFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Custom action prompt state for admin custom message/warning
   const [actionPrompt, setActionPrompt] = useState<ActionPromptState | null>(null);
@@ -235,11 +241,33 @@ export const AdminPanel: React.FC = () => {
     setAdjustAmount(currentBal);
   };
 
+  const handleConfirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeletingUser(true);
+    setDeleteUserFeedback(null);
+    try {
+      const res = await deleteUserPermanently(userToDelete.uid || userToDelete.email);
+      setDeleteUserFeedback({ type: 'success', message: res.message });
+      if (selectedUserForOverride?.email === userToDelete.email || selectedUserForOverride?.uid === userToDelete.uid) {
+        setSelectedUserForOverride(null);
+        setTargetUserEmail('');
+      }
+      setUserToDelete(null);
+      await refreshUsersList();
+      setTimeout(() => setDeleteUserFeedback(null), 5000);
+    } catch (err: any) {
+      setDeleteUserFeedback({ type: 'error', message: err.message || 'Failed to delete user account.' });
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
   const handlePurgeAll = async () => {
-    if (window.confirm('Are you sure you want to delete every existing account and all transaction records? This action cannot be undone.')) {
+    if (window.confirm('Are you sure you want to permanently delete every user account, all files from Firebase Storage, and all transaction records? This action cannot be undone.')) {
       await purgeAllRecords();
       setWithdrawals([]);
       setCodes([]);
+      await refreshUsersList();
       setPurgeSuccess(true);
       setTimeout(() => setPurgeSuccess(false), 4000);
     }
@@ -600,7 +628,7 @@ export const AdminPanel: React.FC = () => {
           }`}
         >
           <Sliders className="w-4 h-4 text-amber-400" />
-          <span>User Balance Override Hub</span>
+          <span>User Accounts &amp; Balances</span>
         </button>
 
         <button
@@ -1305,6 +1333,19 @@ export const AdminPanel: React.FC = () => {
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
+                          {u.email?.toLowerCase() !== 'themotivationalduo@gmail.com' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUserToDelete(u);
+                              }}
+                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 border border-red-500/20 transition-all active:scale-95"
+                              title="Permanently Delete Account from Firebase Firestore & Storage"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1332,6 +1373,21 @@ export const AdminPanel: React.FC = () => {
                 </div>
               )}
 
+              {deleteUserFeedback && (
+                <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                  deleteUserFeedback.type === 'success'
+                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-200'
+                    : 'bg-red-500/20 border-red-500/40 text-red-200'
+                }`}>
+                  {deleteUserFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                  )}
+                  <span>{deleteUserFeedback.message}</span>
+                </div>
+              )}
+
               <form onSubmit={handleExecuteOverrideBalance} className="space-y-4">
                 
                 {/* Target User Account Email */}
@@ -1355,7 +1411,7 @@ export const AdminPanel: React.FC = () => {
 
                 {/* Target User Current Balances Snapshot */}
                 {selectedUserForOverride && (
-                  <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-1.5">
+                  <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-300">Selected User:</span>
                       <strong className="text-white">{selectedUserForOverride.displayName || 'PalmPay Member'}</strong>
@@ -1374,6 +1430,18 @@ export const AdminPanel: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    {/* Permanent Delete Action Button */}
+                    {selectedUserForOverride.email?.toLowerCase() !== 'themotivationalduo@gmail.com' && (
+                      <button
+                        type="button"
+                        onClick={() => setUserToDelete(selectedUserForOverride)}
+                        className="w-full mt-1.5 py-2 px-3 rounded-xl bg-red-600/15 hover:bg-red-600/30 border border-red-500/30 text-red-300 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        <span>Permanently Delete Account from Firebase Storage &amp; Database</span>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2183,6 +2251,127 @@ export const AdminPanel: React.FC = () => {
                     <span>
                       {actionPrompt.type.startsWith('approve') ? 'Confirm Approval & Send' : 'Confirm Decline & Send'}
                     </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: Permanently Delete User Account from Firebase Firestore & Storage */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="mirror-glass-card rounded-3xl p-5 sm:p-7 max-w-lg w-full border-2 border-red-500/60 shadow-[0_0_50px_rgba(239,68,68,0.35)] relative overflow-hidden space-y-4">
+            
+            {/* Top Red Glow Accent */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-600 via-rose-500 to-red-600 animate-pulse" />
+
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 shrink-0">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins',sans-serif]">
+                      Permanent Account Deletion
+                    </h3>
+                    <span className="text-[9px] bg-red-500/20 text-red-300 font-extrabold uppercase px-2 py-0.5 rounded-full border border-red-500/40">
+                      IRREVERSIBLE
+                    </span>
+                  </div>
+                  <p className="text-xs text-red-200/90 mt-0.5">
+                    Permanently wipe this account from Firebase Firestore &amp; Storage.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUserToDelete(null)}
+                disabled={isDeletingUser}
+                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target User Account Profile Summary */}
+            <div className="p-4 rounded-2xl bg-[#0A0D0F] border border-red-500/30 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Account Name:</span>
+                <strong className="text-white text-sm">{userToDelete.displayName || 'PalmPay Member'}</strong>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Email Address:</span>
+                <span className="text-amber-300 font-mono font-bold">{userToDelete.email}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">PalmPay Account / Phone:</span>
+                <span className="text-cyan-300 font-mono font-bold">{userToDelete.accountNumber || userToDelete.phone || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">UID:</span>
+                <span className="text-slate-400 font-mono text-[11px] truncate max-w-[220px]">{userToDelete.uid}</span>
+              </div>
+
+              {/* Balances */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-xs">
+                <div className="p-2 rounded-xl bg-white/5 text-center">
+                  <span className="text-[10px] text-purple-300 block uppercase">CashBack Balance</span>
+                  <span className="font-bold text-amber-400 font-mono text-sm">
+                    ₦{(userToDelete.balance ?? 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-white/5 text-center">
+                  <span className="text-[10px] text-emerald-300 block uppercase">Deposited Balance</span>
+                  <span className="font-bold text-[#00B875] font-mono text-sm">
+                    ₦{(userToDelete.depositBalance ?? 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Warning Scope Breakdown */}
+            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/40 text-xs text-red-200 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-red-300">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>The following will be PERMANENTLY ERASED:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-red-200/90 pl-1">
+                <li>User document from Firebase Firestore (<code className="text-white">users</code> collection)</li>
+                <li>All uploaded receipts, deposit slips &amp; avatars from <strong>Firebase Storage</strong></li>
+                <li>All linked transaction logs, withdrawal requests &amp; deposit proofs</li>
+                <li>All Cashback Code orders &amp; referral connections</li>
+                <li>Active session tokens &amp; local registration entries</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={() => setUserToDelete(null)}
+                className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingUser}
+                onClick={handleConfirmDeleteUser}
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+              >
+                {isDeletingUser ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Erasing from Firebase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 text-white" />
+                    <span>Delete Account Permanently</span>
                   </>
                 )}
               </button>

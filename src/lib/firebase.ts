@@ -7,6 +7,7 @@ import {
   getDoc, 
   setDoc, 
   updateDoc, 
+  deleteDoc,
   collection, 
   query, 
   where, 
@@ -17,6 +18,7 @@ import {
   getDocs, 
   limit 
 } from 'firebase/firestore';
+import { getStorage, ref, deleteObject, listAll } from 'firebase/storage';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -50,10 +52,38 @@ try {
 
 export const db = firestoreDb;
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
+
+/**
+ * Safely delete any files stored in Firebase Storage for a given user UID or prefix
+ */
+export async function deleteUserStorageFiles(uid: string): Promise<number> {
+  if (!uid || !storage) return 0;
+  let deletedCount = 0;
+  const prefixes = [`users/${uid}`, `receipts/${uid}`, `deposits/${uid}`, `withdrawals/${uid}`, `avatars/${uid}`];
+
+  for (const prefix of prefixes) {
+    try {
+      const folderRef = ref(storage, prefix);
+      const res = await listAll(folderRef);
+      for (const itemRef of res.items) {
+        try {
+          await deleteObject(itemRef);
+          deletedCount++;
+        } catch (itemErr) {
+          console.warn(`Could not delete storage file ${itemRef.fullPath}:`, itemErr);
+        }
+      }
+    } catch {
+      // Folder might not exist or have items, safe to ignore
+    }
+  }
+  return deletedCount;
+}
 
 export {
   signInWithPopup,
@@ -65,6 +95,7 @@ export {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -73,6 +104,9 @@ export {
   addDoc,
   serverTimestamp,
   getDocs,
-  limit
+  limit,
+  ref,
+  deleteObject,
+  listAll
 };
 export type { User };

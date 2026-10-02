@@ -10,12 +10,14 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
   onSnapshot,
   addDoc,
-  getDocs
+  getDocs,
+  deleteUserStorageFiles
 } from '../lib/firebase';
 import { UserProfile, Transaction, DepositRequest, WithdrawalRequest, CodeOrder, PlatformNotification, ReferralRecord } from '../types';
 
@@ -37,6 +39,7 @@ interface AuthContextType {
   loginAsAdminDirect: () => Promise<void>;
   logout: () => Promise<void>;
   purgeAllRecords: () => Promise<void>;
+  deleteUserPermanently: (targetUidOrEmail: string) => Promise<{ success: boolean; message: string }>;
   
   // Balances
   updateBalance: (
@@ -60,6 +63,7 @@ interface AuthContextType {
     reason?: string
   ) => Promise<{ success: boolean; message: string; updatedUser?: UserProfile }>;
   getAllUsersForAdmin: () => Promise<UserProfile[]>;
+  deleteUserPermanently: (targetUidOrEmail: string) => Promise<{ success: boolean; message: string }>;
 
   // Bonuses
   claimSignupBonus: () => Promise<boolean>;
@@ -480,6 +484,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(current));
     } catch (err) {
       console.warn('Could not save user registry:', err);
+    }
+  };
+
+  const deleteRegisteredUser = (email: string) => {
+    try {
+      const current = getRegisteredUsersMap();
+      delete current[email.toLowerCase()];
+      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(current));
+    } catch (err) {
+      console.warn('Could not delete user registry record:', err);
     }
   };
 
@@ -1195,15 +1209,192 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.clear();
       localStorage.setItem(PURGE_TIMESTAMP_KEY, Date.now().toString());
 
+      // Purge non-admin user records from Firestore collections
+      try {
+        const collectionsToPurge = ['users', 'transactions', 'withdrawal_requests', 'code_orders', 'deposit_requests', 'referrals'];
+        for (const col of collectionsToPurge) {
+          const snap = await getDocs(collection(db, col));
+          for (const d of snap.docs) {
+            const data = d.data();
+            const email = String(data.email || data.userEmail || '').trim().toLowerCase();
+            if (email === ADMIN_CREDENTIALS.email.toLowerCase()) continue;
+            await deleteDoc(doc(db, col, d.id));
+          }
+        }
+      } catch (fsErr) {
+        console.warn('Firestore purge error:', fsErr);
+      }
+
+      // Trigger server-side purge endpoint
+      try {
+        await fetch('/api/admin/purge-all', { method: 'POST' });
+      } catch (apiErr) {
+        console.warn('Server purge-all endpoint note:', apiErr);
+      }
+
       if (user?.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
         const admin = createAdminProfile();
         saveRegisteredUser(admin, ADMIN_CREDENTIALS.password);
         setUser(admin);
         setTransactions([]);
+        setWithdrawalRequests([]);
+        setDepositRequests([]);
       } else {
         setUser(null);
         setTransactions([]);
+        setWithdrawalRequests([]);
+        setDepositRequests([]);
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Permanently delete a user account from Firebase Firestore, Firebase Storage, and local caches
+  const deleteUserPermanently = async (targetUidOrEmail: string): Promise<{ success: boolean; message: string }> => {
+    const queryTerm = (targetUidOrEmail || '').trim().toLowerCase();
+    if (!queryTerm) {
+      throw new Error('Please specify a valid user email or UID to delete.');
+    }
+
+    if (queryTerm === ADMIN_CREDENTIALS.email.toLowerCase()) {
+      throw new Error('Super Admin account (Mathias Danlami) cannot be deleted.');
+    }
+
+    setLoading(true);
+    try {
+      let targetProfile: UserProfile | null = null;
+      let targetUid = '';
+      const registry = getRegisteredUsersMap();
+
+      // 1. Locate in local registry
+      for (const email of Object.keys(registry)) {
+        if (
+          email.toLowerCase() === queryTerm ||
+          (registry[email]?.profile?.uid && registry[email].profile.uid.toLowerCase() === queryTerm)
+        ) {
+          targetProfile = registry[email].profile;
+          targetUid = targetProfile.uid;
+          break;
+        }
+      }
+
+      // 2. Locate and delete from Firestore users collection
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const docSnap of usersSnap.docs) {
+          const u = docSnap.data() as UserProfile;
+          const uUid = String(u.uid || docSnap.id).toLowerCase();
+          const uEmail = String(u.email || '').toLowerCase();
+          if (docSnap.id.toLowerCase() === queryTerm || uUid === queryTerm || uEmail === queryTerm) {
+            if (!targetProfile) targetProfile = { ...u, uid: u.uid || docSnap.id };
+            if (!targetUid) targetUid = docSnap.id;
+            // Delete user document from Firestore
+            await deleteDoc(doc(db, 'users', docSnap.id));
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore user delete error:', e);
+      }
+
+      const finalUid = targetUid || targetProfile?.uid || queryTerm;
+      const finalEmail = (targetProfile?.email || queryTerm).toLowerCase();
+
+      // 3. Delete user documents from associated Firestore collections
+      try {
+        // Transactions
+        const txSnap = await getDocs(collection(db, 'transactions'));
+        for (const d of txSnap.docs) {
+          const t = d.data();
+          if (t.uid === finalUid || (t.email && t.email.toLowerCase() === finalEmail)) {
+            await deleteDoc(doc(db, 'transactions', d.id));
+          }
+        }
+
+        // Withdrawal Requests
+        const wdSnap = await getDocs(collection(db, 'withdrawal_requests'));
+        for (const d of wdSnap.docs) {
+          const w = d.data();
+          if (w.uid === finalUid || (w.userEmail && w.userEmail.toLowerCase() === finalEmail)) {
+            await deleteDoc(doc(db, 'withdrawal_requests', d.id));
+          }
+        }
+
+        // Code Orders
+        const coSnap = await getDocs(collection(db, 'code_orders'));
+        for (const d of coSnap.docs) {
+          const c = d.data();
+          if (c.uid === finalUid || (c.userEmail && c.userEmail.toLowerCase() === finalEmail)) {
+            await deleteDoc(doc(db, 'code_orders', d.id));
+          }
+        }
+
+        // Deposit Requests
+        const depSnap = await getDocs(collection(db, 'deposit_requests'));
+        for (const d of depSnap.docs) {
+          const dep = d.data();
+          if (dep.uid === finalUid || (dep.userEmail && dep.userEmail.toLowerCase() === finalEmail)) {
+            await deleteDoc(doc(db, 'deposit_requests', d.id));
+          }
+        }
+
+        // Referrals
+        const refSnap = await getDocs(collection(db, 'referrals'));
+        for (const d of refSnap.docs) {
+          const r = d.data();
+          if (
+            r.referrerUid === finalUid ||
+            r.referredUid === finalUid ||
+            (r.referrerEmail && r.referrerEmail.toLowerCase() === finalEmail) ||
+            (r.referredEmail && r.referredEmail.toLowerCase() === finalEmail)
+          ) {
+            await deleteDoc(doc(db, 'referrals', d.id));
+          }
+        }
+      } catch (relErr) {
+        console.warn('Deleting related Firestore records note:', relErr);
+      }
+
+      // 4. Delete user files from Firebase Storage
+      try {
+        await deleteUserStorageFiles(finalUid);
+      } catch (stErr) {
+        console.warn('Firebase Storage file cleanup note:', stErr);
+      }
+
+      // 5. Invoke backend server endpoint to ensure server-side deletion
+      try {
+        await fetch('/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: finalUid, email: finalEmail })
+        });
+      } catch (apiErr) {
+        console.warn('Backend delete-user call note:', apiErr);
+      }
+
+      // 6. Delete from localStorage registry and local caches
+      deleteRegisteredUser(finalEmail);
+      if (finalUid) {
+        localStorage.removeItem(`palmpay_wd_${finalUid}`);
+        localStorage.removeItem(`palmpay_tx_${finalUid}`);
+      }
+
+      // 7. If the deleted user is currently in session, log them out
+      if (user && (user.uid === finalUid || user.email.toLowerCase() === finalEmail)) {
+        sessionStorage.removeItem('palmpay_current_session_user');
+        setUser(null);
+      }
+
+      // 8. Filter in-memory state
+      setWithdrawalRequests((prev) => prev.filter((r) => r.uid !== finalUid && r.userEmail?.toLowerCase() !== finalEmail));
+      setDepositRequests((prev) => prev.filter((r) => r.uid !== finalUid && r.userEmail?.toLowerCase() !== finalEmail));
+      setTransactions((prev) => prev.filter((t) => t.uid !== finalUid && t.email?.toLowerCase() !== finalEmail));
+
+      return {
+        success: true,
+        message: `User ${targetProfile?.displayName || finalEmail} has been permanently deleted from Firebase Firestore & Storage.`
+      };
     } finally {
       setLoading(false);
     }
@@ -2644,6 +2835,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginAsAdminDirect,
         logout,
         purgeAllRecords,
+        deleteUserPermanently,
         updateBalance,
         updateDepositBalance,
         overrideUserBalance,

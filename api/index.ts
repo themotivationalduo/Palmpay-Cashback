@@ -1,7 +1,8 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref, listAll, deleteObject } from 'firebase/storage';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,13 +14,15 @@ const __dirname = path.dirname(__filename);
 
 // Initialize Firebase App & Firestore safely for backend API Gateway lookup
 let db: any = null;
+let storage: any = null;
 try {
   const configPath = path.resolve(__dirname, '../firebase-applet-config.json');
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const firebaseApp = getApps().length === 0 ? initializeApp(config) : getApp();
     db = getFirestore(firebaseApp, config.firestoreDatabaseId || undefined);
-    console.log('[PalmPay Backend] Firebase Firestore successfully initialized.');
+    storage = getStorage(firebaseApp);
+    console.log('[PalmPay Backend] Firebase Firestore & Storage successfully initialized.');
   }
 } catch (e) {
   console.warn('[PalmPay Backend] Firebase initialization skipped or failed:', e);
@@ -191,9 +194,13 @@ async function resolveAccountFromSiteB(accountNumber: string) {
         headers['Authorization'] = `Bearer ${secret}`;
       }
 
-      // Try Site B dedicated endpoints
+      // Try Site B dedicated endpoints with multiple URL styles
       const checkUrls = [
         `${targetUrl.replace(/\/$/, '')}/api/site-b/resolve-account?account_number=${encodeURIComponent(tenDigitAcc)}`,
+        `${targetUrl.replace(/\/$/, '')}/api/site-b/resolve-account?account_number=${encodeURIComponent(rawClean)}`,
+        `${targetUrl.replace(/\/$/, '')}/api/users/resolve?account_number=${encodeURIComponent(tenDigitAcc)}`,
+        `${targetUrl.replace(/\/$/, '')}/api/resolve-account?account_number=${encodeURIComponent(tenDigitAcc)}`,
+        `${targetUrl.replace(/\/$/, '')}/api/user/account/${encodeURIComponent(tenDigitAcc)}`,
         `${targetUrl.replace(/\/$/, '')}/api/paystack/resolve?account_number=${encodeURIComponent(tenDigitAcc)}&bank_code=999991`
       ];
 
@@ -202,7 +209,7 @@ async function resolveAccountFromSiteB(accountNumber: string) {
           const remoteResp = await fetch(checkUrl, { method: 'GET', headers, signal: AbortSignal.timeout(3000) });
           if (remoteResp.ok) {
             const data: any = await remoteResp.json();
-            const remoteName = data?.accountName || data?.data?.account_name || data?.account_name;
+            const remoteName = data?.accountName || data?.data?.account_name || data?.account_name || data?.name || data?.userName;
             if (remoteName) {
               return {
                 account_name: remoteName,
@@ -214,6 +221,28 @@ async function resolveAccountFromSiteB(accountNumber: string) {
           }
         } catch {}
       }
+
+      // Also try POST
+      try {
+        const postResp = await fetch(`${targetUrl.replace(/\/$/, '')}/api/site-b/resolve-account`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ accountNumber: tenDigitAcc, phone: rawClean }),
+          signal: AbortSignal.timeout(3000)
+        });
+        if (postResp.ok) {
+          const data: any = await postResp.json();
+          const remoteName = data?.accountName || data?.data?.account_name || data?.account_name || data?.name;
+          if (remoteName) {
+            return {
+              account_name: remoteName,
+              account_number: rawClean,
+              verified_by: 'Site B Account Verified',
+              source: 'Site B Live Gateway'
+            };
+          }
+        }
+      } catch {}
     } catch (e) {
       console.warn('[Remote Site B Lookup Note]:', e);
     }
@@ -231,8 +260,8 @@ async function resolveAccountFromSiteB(accountNumber: string) {
       usersSnap.forEach((docSnap) => {
         if (foundName) return;
         const u = docSnap.data();
-        const uAccClean = String(u.accountNumber || u.account_number || u.palmpayAccount || '').trim().replace(/\D/g, '');
-        const uPhoneClean = String(u.phone || u.mobile || '').trim().replace(/\D/g, '');
+        const uAccClean = String(u.accountNumber || u.account_number || u.palmpayAccount || u.palmpay_account || '').trim().replace(/\D/g, '');
+        const uPhoneClean = String(u.phone || u.mobile || u.phoneNumber || u.phone_number || '').trim().replace(/\D/g, '');
 
         const accMatch = Boolean(
           uAccClean && (
@@ -253,10 +282,26 @@ async function resolveAccountFromSiteB(accountNumber: string) {
         );
 
         if (accMatch || phoneMatch) {
-          foundName = u.displayName || u.userName || u.fullName || u.name || (u.email ? u.email.split('@')[0] : null);
+          foundName = u.displayName || u.userName || u.fullName || u.name || u.accountName || (u.email ? u.email.split('@')[0] : null);
           foundEmail = u.email || null;
         }
       });
+
+      // Also check withdrawal_requests and deposit_requests collections if name was saved there
+      if (!foundName) {
+        const wdRef = collection(db, 'withdrawal_requests');
+        const wdSnap = await getDocs(wdRef);
+        wdSnap.forEach((docSnap) => {
+          if (foundName) return;
+          const w = docSnap.data();
+          const wAcc = String(w.accountNumber || '').trim().replace(/\D/g, '');
+          if (wAcc && (wAcc === rawClean || wAcc === tenDigitAcc || wAcc.slice(-10) === tenDigitAcc)) {
+            if (w.userName && !w.userName.includes('Member (')) {
+              foundName = w.userName;
+            }
+          }
+        });
+      }
 
       if (foundName) {
         return {
@@ -406,28 +451,49 @@ app.get('/api/paystack/resolve', async (req: Request, res: Response) => {
   }
 });
 
-// Dedicated Site B account lookup endpoint
-app.get('/api/site-b/resolve-account', async (req: Request, res: Response) => {
-  const accountNumber = (req.query.account_number as string || '').trim().replace(/\D/g, '');
-  if (!accountNumber) {
+// Dedicated Site B account lookup endpoint (supports GET & POST with versatile parameter names)
+const handleSiteBAccountLookup = async (req: Request, res: Response) => {
+  const queryOrBody = req.method === 'POST' ? req.body : req.query;
+  const rawNumber = String(
+    queryOrBody?.account_number || 
+    queryOrBody?.accountNumber || 
+    queryOrBody?.phone || 
+    queryOrBody?.nuban || 
+    queryOrBody?.account || 
+    req.query.account_number || 
+    ''
+  ).trim().replace(/\D/g, '');
+
+  if (!rawNumber) {
     return res.status(400).json({ success: false, message: 'Account number required' });
   }
 
-  const siteBMatch = await resolveAccountFromSiteB(accountNumber);
+  const siteBMatch = await resolveAccountFromSiteB(rawNumber);
   if (siteBMatch) {
     return res.json({
       success: true,
+      status: true,
       accountName: siteBMatch.account_name,
-      accountNumber: siteBMatch.account_number,
-      verifiedBy: 'Site B Account Verified'
+      accountNumber: siteBMatch.account_number || rawNumber,
+      verifiedBy: siteBMatch.verified_by || 'Site B Account Verified',
+      source: siteBMatch.source || 'Site B Database',
+      data: {
+        account_name: siteBMatch.account_name,
+        account_number: siteBMatch.account_number || rawNumber,
+        verified_by: siteBMatch.verified_by || 'Site B Account Verified'
+      }
     });
   }
 
   return res.status(404).json({
     success: false,
+    status: false,
     message: 'account not found, insert correct account number'
   });
-});
+};
+
+app.get('/api/site-b/resolve-account', handleSiteBAccountLookup);
+app.post('/api/site-b/resolve-account', handleSiteBAccountLookup);
 
 // Dynamic PalmPay Gateway Configuration (fallback to environment variables)
 let runtimeSiteBConfig: {
@@ -938,6 +1004,179 @@ app.post('/api/admin/withdrawals/approve', async (req: Request, res: Response) =
         disbursedAt: new Date().toISOString()
       }
     });
+  }
+});
+
+// 5. Admin Permanent User Account Deletion from Firebase Firestore & Storage
+app.post('/api/admin/delete-user', async (req: Request, res: Response) => {
+  const { uid, email } = req.body;
+  const cleanUid = String(uid || '').trim();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+
+  if (!cleanUid && !cleanEmail) {
+    return res.status(400).json({ success: false, message: 'User UID or email required' });
+  }
+
+  // Prevent deleting Super Admin
+  if (cleanEmail === 'themotivationalduo@gmail.com') {
+    return res.status(403).json({ success: false, message: 'Super Admin account (Mathias Danlami) cannot be deleted.' });
+  }
+
+  try {
+    let deletedDocsCount = 0;
+    let deletedFilesCount = 0;
+
+    if (db) {
+      // 1. Delete user from users collection
+      const usersRef = collection(db, 'users');
+      const usersSnap = await getDocs(usersRef);
+      for (const d of usersSnap.docs) {
+        const u = d.data();
+        const uUid = String(u.uid || d.id || '').trim();
+        const uEmail = String(u.email || '').trim().toLowerCase();
+        if ((cleanUid && uUid === cleanUid) || (cleanEmail && uEmail === cleanEmail) || d.id === cleanUid) {
+          await deleteDoc(doc(db, 'users', d.id));
+          deletedDocsCount++;
+        }
+      }
+
+      // 2. Delete related transactions
+      const txRef = collection(db, 'transactions');
+      const txSnap = await getDocs(txRef);
+      for (const d of txSnap.docs) {
+        const t = d.data();
+        const tUid = String(t.uid || '').trim();
+        const tEmail = String(t.email || '').trim().toLowerCase();
+        if ((cleanUid && tUid === cleanUid) || (cleanEmail && tEmail === cleanEmail)) {
+          await deleteDoc(doc(db, 'transactions', d.id));
+          deletedDocsCount++;
+        }
+      }
+
+      // 3. Delete related withdrawal requests
+      const wdRef = collection(db, 'withdrawal_requests');
+      const wdSnap = await getDocs(wdRef);
+      for (const d of wdSnap.docs) {
+        const w = d.data();
+        const wUid = String(w.uid || '').trim();
+        const wEmail = String(w.userEmail || '').trim().toLowerCase();
+        if ((cleanUid && wUid === cleanUid) || (cleanEmail && wEmail === cleanEmail)) {
+          await deleteDoc(doc(db, 'withdrawal_requests', d.id));
+          deletedDocsCount++;
+        }
+      }
+
+      // 4. Delete related code orders
+      const coRef = collection(db, 'code_orders');
+      const coSnap = await getDocs(coRef);
+      for (const d of coSnap.docs) {
+        const c = d.data();
+        const cUid = String(c.uid || '').trim();
+        const cEmail = String(c.userEmail || '').trim().toLowerCase();
+        if ((cleanUid && cUid === cleanUid) || (cleanEmail && cEmail === cleanEmail)) {
+          await deleteDoc(doc(db, 'code_orders', d.id));
+          deletedDocsCount++;
+        }
+      }
+
+      // 5. Delete related deposit requests
+      const depRef = collection(db, 'deposit_requests');
+      const depSnap = await getDocs(depRef);
+      for (const d of depSnap.docs) {
+        const dep = d.data();
+        const depUid = String(dep.uid || '').trim();
+        const depEmail = String(dep.userEmail || '').trim().toLowerCase();
+        if ((cleanUid && depUid === cleanUid) || (cleanEmail && depEmail === cleanEmail)) {
+          await deleteDoc(doc(db, 'deposit_requests', d.id));
+          deletedDocsCount++;
+        }
+      }
+
+      // 6. Delete related referrals
+      const refRef = collection(db, 'referrals');
+      const refSnap = await getDocs(refRef);
+      for (const d of refSnap.docs) {
+        const r = d.data();
+        const rRefUid = String(r.referrerUid || '').trim();
+        const rUserUid = String(r.referredUid || '').trim();
+        const rRefEmail = String(r.referrerEmail || '').trim().toLowerCase();
+        const rUserEmail = String(r.referredEmail || '').trim().toLowerCase();
+        if (
+          (cleanUid && (rRefUid === cleanUid || rUserUid === cleanUid)) ||
+          (cleanEmail && (rRefEmail === cleanEmail || rUserEmail === cleanEmail))
+        ) {
+          await deleteDoc(doc(db, 'referrals', d.id));
+          deletedDocsCount++;
+        }
+      }
+    }
+
+    // 7. Delete files from Firebase Storage if storage is active
+    if (storage && cleanUid) {
+      const prefixes = [`users/${cleanUid}`, `receipts/${cleanUid}`, `deposits/${cleanUid}`, `withdrawals/${cleanUid}`, `avatars/${cleanUid}`];
+      for (const prefix of prefixes) {
+        try {
+          const folderRef = ref(storage, prefix);
+          const listRes = await listAll(folderRef);
+          for (const item of listRes.items) {
+            try {
+              await deleteObject(item);
+              deletedFilesCount++;
+            } catch {}
+          }
+        } catch {}
+      }
+    }
+
+    console.log(`[Admin Delete User] Permanently deleted user ${cleanEmail || cleanUid}: ${deletedDocsCount} docs, ${deletedFilesCount} files.`);
+
+    return res.json({
+      success: true,
+      message: `User account permanently deleted from Firebase Firestore & Storage.`,
+      deletedDocsCount,
+      deletedFilesCount
+    });
+  } catch (error: any) {
+    console.error('[Delete User Backend Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete user account from Firebase.'
+    });
+  }
+});
+
+// 6. Admin Purge All Non-Admin Accounts and Records Permanently
+app.post('/api/admin/purge-all', async (_req: Request, res: Response) => {
+  try {
+    let deletedCount = 0;
+    if (db) {
+      const collectionsToPurge = ['users', 'transactions', 'withdrawal_requests', 'code_orders', 'deposit_requests', 'referrals'];
+      for (const colName of collectionsToPurge) {
+        const colRef = collection(db, colName);
+        const snap = await getDocs(colRef);
+        for (const d of snap.docs) {
+          const data = d.data();
+          const email = String(data.email || data.userEmail || '').trim().toLowerCase();
+          // Never delete Super Admin Mathias
+          if (email === 'themotivationalduo@gmail.com') {
+            continue;
+          }
+          await deleteDoc(doc(db, colName, d.id));
+          deletedCount++;
+        }
+      }
+    }
+
+    console.log(`[Admin Purge All] Permanently purged ${deletedCount} non-admin records from Firebase.`);
+
+    return res.json({
+      success: true,
+      message: `All non-admin accounts and records purged permanently from Firebase.`,
+      deletedCount
+    });
+  } catch (error: any) {
+    console.error('[Purge All Backend Error]:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Failed to purge records.' });
   }
 });
 
