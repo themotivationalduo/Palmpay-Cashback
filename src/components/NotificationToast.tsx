@@ -21,7 +21,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
   const isFlashAlert = isDeposit || isWithdrawal || isCodeApproval;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-bottom-5 fade-in duration-300">
+    <div className="fixed top-14 sm:top-16 right-2 sm:right-6 z-50 max-w-sm sm:max-w-md w-[calc(100vw-1rem)] sm:w-full animate-in slide-in-from-top-4 fade-in duration-300">
       <div className={`mirror-glass-card rounded-2xl p-4 relative overflow-hidden backdrop-blur-xl transition-all duration-300 ${
         isDeposit 
           ? 'border-2 border-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.5)] bg-[#071d18]/95 animate-pulse' 
