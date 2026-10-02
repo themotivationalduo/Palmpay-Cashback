@@ -21,7 +21,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
   const isFlashAlert = isDeposit || isWithdrawal || isCodeApproval;
 
   return (
-    <div className="fixed top-14 sm:top-16 right-2 sm:right-6 z-50 max-w-sm sm:max-w-md w-[calc(100vw-1rem)] sm:w-full animate-in slide-in-from-top-4 fade-in duration-300">
+    <div className="fixed top-2.5 sm:top-4 right-2 sm:right-6 z-[9999] max-w-sm sm:max-w-md w-[calc(100vw-1rem)] sm:w-full animate-in slide-in-from-top-4 fade-in duration-300">
       <div className={`mirror-glass-card rounded-2xl p-4 relative overflow-hidden backdrop-blur-xl transition-all duration-300 ${
         isDeposit 
           ? 'border-2 border-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.5)] bg-[#071d18]/95 animate-pulse' 
@@ -42,12 +42,18 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
             : 'bg-gradient-to-r from-purple-500 via-[#FFC107] to-purple-500'
         }`} />
 
-        {isFlashAlert && (
-          <div className="flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full w-fit bg-white/10 border border-white/20 text-[9px] font-extrabold uppercase tracking-widest text-amber-300 animate-bounce">
-            <Zap className="w-3 h-3 fill-amber-300 text-amber-300" />
-            <span>FLASH ALERT</span>
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-400/30 text-[9px] font-extrabold uppercase tracking-wider text-purple-200">
+            <Bell className="w-3 h-3 text-[#FFC107]" />
+            <span>HEADER NOTIFICATION</span>
           </div>
-        )}
+          {isFlashAlert && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 border border-white/20 text-[9px] font-extrabold uppercase tracking-widest text-amber-300 animate-bounce">
+              <Zap className="w-3 h-3 fill-amber-300 text-amber-300" />
+              <span>FLASH</span>
+            </div>
+          )}
+        </div>
 
         <div className="flex items-start gap-3">
           <div className={`p-2 rounded-xl shrink-0 mt-0.5 shadow-inner ${
