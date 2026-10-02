@@ -24,6 +24,8 @@ import {
 import { useAuth, OFFICIAL_CASHBACK_CODE } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { resolvePaystackAccount } from '../services/paystackService';
+import { db, collection, getDocs, doc, setDoc, getDoc } from '../lib/firebase';
+import { CodeOrder, UserProfile } from '../types';
 
 interface WithdrawalModalProps {
   isOpen: boolean;
@@ -67,6 +69,55 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
   const codeValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Auto-detect and populate approved code for user when page loads
+  useEffect(() => {
+    let isMounted = true;
+    const loadApprovedCode = async () => {
+      let codeToFill = (user?.hasActiveCode && user?.activeCashbackCode && !user.activeCashbackCode.toLowerCase().includes('pending'))
+        ? user.activeCashbackCode.trim()
+        : '';
+
+      if (!codeToFill && user) {
+        try {
+          const ordersSnap = await getDocs(collection(db, 'code_orders'));
+          ordersSnap.forEach((docSnap) => {
+            const c = docSnap.data() as CodeOrder;
+            const matchesUser = Boolean(
+              c.uid === user.uid ||
+              (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase())
+            );
+            if (matchesUser && c.status === 'approved' && c.generatedCode && !c.generatedCode.toLowerCase().includes('pending')) {
+              codeToFill = c.generatedCode.trim();
+            }
+          });
+        } catch (e) {}
+
+        if (!codeToFill && user.uid) {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', user.uid));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              if (uData.hasActiveCode && uData.activeCashbackCode && !uData.activeCashbackCode.toLowerCase().includes('pending')) {
+                codeToFill = uData.activeCashbackCode.trim();
+              }
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (isMounted && codeToFill && !enteredCode) {
+        setEnteredCode(codeToFill);
+        handleCodeChange(codeToFill);
+      }
+    };
+
+    loadApprovedCode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid, user?.email, user?.hasActiveCode, user?.activeCashbackCode]);
+
   // Real-time Cashback Code Validation Handler
   const handleCodeChange = (rawVal: string) => {
     setEnteredCode(rawVal);
@@ -99,13 +150,105 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       
       setCodeProgressStep(2); // Step 2: Database Registry Lookup
 
-      setTimeout(() => {
-        // 2. Existence Check in System
-        const activeUserCode = (user?.activeCashbackCode || '').trim().toLowerCase();
-        const userHasActiveCode = Boolean(user?.hasActiveCode);
-        const codeIsPending = activeUserCode.includes('pending');
+      setTimeout(async () => {
+        // 2. Comprehensive Existence & Approval Check
+        let activeUserCode = (user?.activeCashbackCode || '').trim().toLowerCase();
+        let userHasActiveCode = Boolean(user?.hasActiveCode && !activeUserCode.includes('pending'));
+        let codeIsPending = activeUserCode.includes('pending');
+        let matchedApprovedOrder: CodeOrder | null = null;
+        let userApprovedOrder: CodeOrder | null = null;
+        let isCodeApprovedInSystem = false;
 
-        const codeMatchesUser = isFormatValid && (cleanCode === activeUserCode);
+        // Query Firestore code_orders
+        try {
+          const ordersSnap = await getDocs(collection(db, 'code_orders'));
+          ordersSnap.forEach((docSnap) => {
+            const c = docSnap.data() as CodeOrder;
+            const cCode = (c.generatedCode || '').trim().toLowerCase();
+            const matchesUser = Boolean(
+              user && (
+                c.uid === user.uid ||
+                (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase())
+              )
+            );
+
+            if (c.status === 'approved' && cCode && !cCode.includes('pending')) {
+              if (cCode === cleanCode) {
+                matchedApprovedOrder = c;
+                isCodeApprovedInSystem = true;
+              }
+              if (matchesUser) {
+                userApprovedOrder = c;
+              }
+            } else if (c.status === 'pending') {
+              if (matchesUser && cCode === cleanCode) {
+                codeIsPending = true;
+              }
+            }
+          });
+        } catch (e) {
+          console.warn('Real-time code orders validation check note:', e);
+        }
+
+        // Also check users collection in Firestore
+        if (user?.uid) {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', user.uid));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              if (uData.hasActiveCode && uData.activeCashbackCode && !uData.activeCashbackCode.toLowerCase().includes('pending')) {
+                const uDbCode = uData.activeCashbackCode.trim().toLowerCase();
+                userHasActiveCode = true;
+                codeIsPending = false;
+                if (!activeUserCode || activeUserCode.includes('pending')) {
+                  activeUserCode = uDbCode;
+                }
+                if (cleanCode === uDbCode) {
+                  isCodeApprovedInSystem = true;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('User doc check note:', e);
+          }
+        }
+
+        // If matched an approved code order in Firestore, activate immediately for this user!
+        if (matchedApprovedOrder) {
+          userHasActiveCode = true;
+          codeIsPending = false;
+          activeUserCode = cleanCode;
+
+          // Automatically sync & permanently activate on user's Firestore profile
+          if (user?.uid) {
+            try {
+              await setDoc(doc(db, 'users', user.uid), {
+                hasActiveCode: true,
+                activeCashbackCode: (matchedApprovedOrder as CodeOrder).generatedCode
+              }, { merge: true });
+            } catch (e) {}
+          }
+        } else if (userApprovedOrder) {
+          const approvedCodeVal = (userApprovedOrder as CodeOrder).generatedCode.trim().toLowerCase();
+          userHasActiveCode = true;
+          codeIsPending = false;
+          if (cleanCode === approvedCodeVal) {
+            activeUserCode = cleanCode;
+            isCodeApprovedInSystem = true;
+          } else if (!activeUserCode || activeUserCode.includes('pending')) {
+            activeUserCode = approvedCodeVal;
+          }
+        }
+
+        // Official code check
+        if (cleanCode === OFFICIAL_CASHBACK_CODE.toLowerCase()) {
+          userHasActiveCode = true;
+          codeIsPending = false;
+          activeUserCode = cleanCode;
+          isCodeApprovedInSystem = true;
+        }
+
+        const codeMatchesUser = isFormatValid && (cleanCode === activeUserCode || isCodeApprovedInSystem);
 
         setCodeProgressStep(3); // Step 3: Account Ownership & Clearance Check
 
@@ -128,10 +271,10 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               message: 'Code recognized in system but is Pending Admin Approval on Control Panel.',
               isValid: false
             });
-          } else if (!userHasActiveCode || !activeUserCode || codeIsPending) {
+          } else if (!userHasActiveCode || (!activeUserCode && !isCodeApprovedInSystem)) {
             setCodeValidationResult({
               formatOk: true,
-              existsOk: true,
+              existsOk: false,
               assignedOk: false,
               message: 'Your account does not have an active approved CashBack Code yet. Please purchase one first.',
               isValid: false
@@ -141,7 +284,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
               formatOk: true,
               existsOk: false,
               assignedOk: false,
-              message: `Code '${rawVal}' is not assigned to your account or belongs to another user.`,
+              message: `Code '${rawVal}' does not match your active approved code (${activeUserCode}).`,
               isValid: false
             });
           } else {
@@ -175,7 +318,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
 
   const resolveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Automatic Paystack Name Resolution function
+  // Automatic Paystack Name Resolution function with Site B fallback
   const handleAutoResolve = async (num: string) => {
     const cleanNumber = num.replace(/\D/g, '');
     if (cleanNumber.length < 10) {
@@ -271,8 +414,6 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const cashbackBal = user?.balance ?? 0;
   const depositBal = user?.depositBalance ?? 0;
   const selectedAvailable = balanceSource === 'deposit' ? depositBal : cashbackBal;
@@ -281,7 +422,7 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
     e.preventDefault();
     const cleanAcc = (accountNumber || '').trim().replace(/\D/g, '');
     if (!cleanAcc || cleanAcc.length < 10) {
-      setError('Please enter a valid 10-digit PalmPay account number.');
+      setError('account not found, insert correct account number');
       return;
     }
 
@@ -310,12 +451,72 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
       return;
     }
 
-    if (!user?.hasActiveCode || !user?.activeCashbackCode || user.activeCashbackCode.toLowerCase().includes('pending')) {
-      setError('Your account does not have an active approved CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.');
+    let userHasCode = Boolean(user?.hasActiveCode && user?.activeCashbackCode && !user.activeCashbackCode.toLowerCase().includes('pending'));
+    let assignedCode = (user?.activeCashbackCode || '').trim().toLowerCase();
+    let isCodeApproved = false;
+
+    // In case user state has not refreshed, check code_orders directly in Firestore
+    try {
+      const ordersSnap = await getDocs(collection(db, 'code_orders'));
+      ordersSnap.forEach((docSnap) => {
+        const c = docSnap.data() as CodeOrder;
+        const isUser = Boolean(
+          user && (
+            c.uid === user.uid ||
+            (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase())
+          )
+        );
+        const cCode = (c.generatedCode || '').trim().toLowerCase();
+        if (c.status === 'approved' && cCode && !cCode.includes('pending')) {
+          if (cleanCode === cCode) {
+            userHasCode = true;
+            assignedCode = cleanCode;
+            isCodeApproved = true;
+          }
+          if (isUser) {
+            userHasCode = true;
+            if (!assignedCode || assignedCode.includes('pending')) {
+              assignedCode = cCode;
+            }
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('Withdrawal submit code check note:', err);
+    }
+
+    // Check users collection
+    if (user?.uid) {
+      try {
+        const uSnap = await getDoc(doc(db, 'users', user.uid));
+        if (uSnap.exists()) {
+          const uData = uSnap.data();
+          if (uData.hasActiveCode && uData.activeCashbackCode && !uData.activeCashbackCode.toLowerCase().includes('pending')) {
+            userHasCode = true;
+            const uDbCode = uData.activeCashbackCode.trim().toLowerCase();
+            if (cleanCode === uDbCode) {
+              assignedCode = cleanCode;
+              isCodeApproved = true;
+            } else if (!assignedCode || assignedCode.includes('pending')) {
+              assignedCode = uDbCode;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (cleanCode === OFFICIAL_CASHBACK_CODE.toLowerCase()) {
+      userHasCode = true;
+      assignedCode = cleanCode;
+      isCodeApproved = true;
+    }
+
+    if (!userHasCode || (!assignedCode && !isCodeApproved)) {
+      setError('Your account does not have an active approved CashBack Code yet. Please purchase one first.');
       return;
     }
 
-    if (cleanCode !== user.activeCashbackCode.toLowerCase()) {
+    if (cleanCode !== assignedCode && !isCodeApproved) {
       setError(`Invalid CashBack Code. The code entered ('${enteredCode}') is not assigned to your account or does not match your active approved CashBack Code.`);
       return;
     }
@@ -469,6 +670,14 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                   )}
                 </div>
 
+                {/* Account Not Found Alert Banner */}
+                {error === 'account not found, insert correct account number' && (
+                  <div className="mt-1.5 p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-1.5 animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <span className="font-semibold">account not found, insert correct account number</span>
+                  </div>
+                )}
+
                 {/* Automatically Fetched Account Name */}
                 {(accountName || isResolving) && (
                   <div className="mt-1.5 p-2.5 rounded-xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between animate-in fade-in">
@@ -571,7 +780,20 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     <KeyRound className="w-3.5 h-3.5 text-[#FFC107]" />
                     CashBack Code <span className="text-red-400">*</span>
                   </label>
-                  <span className="text-[10px] text-amber-300/80 font-medium">Manual Entry Required</span>
+                  {user?.activeCashbackCode && !user.activeCashbackCode.includes('pending') ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEnteredCode(user.activeCashbackCode!);
+                        handleCodeChange(user.activeCashbackCode!);
+                      }}
+                      className="text-[10px] text-[#00B875] hover:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono font-bold"
+                    >
+                      Use My Code: {user.activeCashbackCode}
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-amber-300/80 font-medium">Manual Entry Required</span>
+                  )}
                 </div>
                 <input
                   type="text"

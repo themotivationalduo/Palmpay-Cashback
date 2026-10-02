@@ -31,7 +31,7 @@ import {
   MessageSquare,
   Send
 } from 'lucide-react';
-import { useAuth, getLocalWithdrawalRequests } from '../context/AuthContext';
+import { useAuth, getLocalWithdrawalRequests, generateRandomCashbackCode } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { db, collection, query, onSnapshot, updateDoc, doc, addDoc, getDocs } from '../lib/firebase';
 import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile } from '../types';
@@ -1153,6 +1153,9 @@ export const AdminPanel: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
+                              const codeToAssign = (!c.generatedCode || c.generatedCode.toLowerCase().includes('pending') || !c.generatedCode.startsWith('palm_'))
+                                ? generateRandomCashbackCode()
+                                : c.generatedCode;
                               setActionPrompt({
                                 isOpen: true,
                                 type: 'approve_code',
@@ -1160,9 +1163,9 @@ export const AdminPanel: React.FC = () => {
                                 userName: c.userEmail.split('@')[0],
                                 userEmail: c.userEmail,
                                 amount: c.codePrice || 8550,
-                                code: c.generatedCode,
+                                code: codeToAssign,
                                 reference: c.paymentReference,
-                                customMessage: 'CashBack Code approved and activated. Your code is now active for withdrawals.',
+                                customMessage: `CashBack Code (${codeToAssign}) approved and activated. Your code is now active for withdrawals.`,
                                 isWarning: false
                               });
                             }}
@@ -2006,12 +2009,52 @@ export const AdminPanel: React.FC = () => {
                   <span className="text-[#FFC107] font-bold">{actionPrompt.accountNumber}</span>
                 </div>
               )}
-              {actionPrompt.code && (
+              {actionPrompt.type === 'approve_code' ? (
+                <div className="pt-2 border-t border-white/10 space-y-1.5">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="font-semibold text-white flex items-center gap-1">
+                      <KeyRound className="w-3.5 h-3.5 text-[#FFC107]" />
+                      Assigned CashBack Code:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newCode = generateRandomCashbackCode();
+                        setActionPrompt(prev => prev ? {
+                          ...prev,
+                          code: newCode,
+                          customMessage: `CashBack Code (${newCode}) approved and activated. Your code is now active for withdrawals.`
+                        } : null);
+                      }}
+                      className="text-[10px] text-purple-300 hover:text-white underline font-mono font-bold"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={actionPrompt.code || ''}
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      setActionPrompt(prev => prev ? {
+                        ...prev,
+                        code: v,
+                        customMessage: `CashBack Code (${v}) approved and activated. Your code is now active for withdrawals.`
+                      } : null);
+                    }}
+                    placeholder="palm_###_cash_###"
+                    className="w-full bg-[#150a24] text-white font-mono font-bold text-sm rounded-xl px-3 py-2 border border-purple-500/40 focus:outline-none focus:border-[#00B875] text-center"
+                  />
+                  <p className="text-[10px] text-purple-200/80 font-normal">
+                    This code will be permanently activated on <strong>{actionPrompt.userEmail}</strong>'s account.
+                  </p>
+                </div>
+              ) : actionPrompt.code ? (
                 <div className="flex justify-between items-center text-slate-300">
                   <span>User Inserted Code:</span>
                   <span className="text-[#FFC107] font-extrabold">{actionPrompt.code}</span>
                 </div>
-              )}
+              ) : null}
               {actionPrompt.reference && (
                 <div className="flex justify-between items-center text-slate-300">
                   <span>Reference:</span>

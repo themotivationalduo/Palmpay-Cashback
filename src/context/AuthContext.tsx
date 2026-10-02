@@ -645,12 +645,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     );
 
+    // Real-time listener for code_orders: immediately activates code upon admin approval
+    const userEmailKey = (user.email || '').trim().toLowerCase();
+    const unsubCodeOrders = onSnapshot(
+      collection(db, 'code_orders'),
+      (snapshot) => {
+        let approvedCode: string | null = null;
+        snapshot.forEach((docSnap) => {
+          const c = docSnap.data() as CodeOrder;
+          const isThisUser = c.uid === user.uid || (c.userEmail && c.userEmail.trim().toLowerCase() === userEmailKey);
+          if (isThisUser && c.status === 'approved' && c.generatedCode && !c.generatedCode.toLowerCase().includes('pending')) {
+            approvedCode = c.generatedCode.trim();
+          }
+        });
+
+        if (approvedCode) {
+          setUser((prev) => {
+            if (!prev) return null;
+            if (!prev.hasActiveCode || prev.activeCashbackCode !== approvedCode) {
+              const updated: UserProfile = {
+                ...prev,
+                hasActiveCode: true,
+                activeCashbackCode: approvedCode!
+              };
+              try {
+                sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updated));
+                saveRegisteredUser(updated);
+              } catch (e) {}
+              return updated;
+            }
+            return prev;
+          });
+        }
+      },
+      (err) => {
+        console.warn('Code orders listener note:', err);
+      }
+    );
+
+    const handleCodeApprovedEvent = (e: any) => {
+      const detail = e.detail;
+      if (!detail) return;
+      const isTarget = (detail.uid && detail.uid === user.uid) || (detail.email && user.email && detail.email.toLowerCase() === user.email.toLowerCase());
+      if (isTarget && detail.code) {
+        setUser((prev) => {
+          if (!prev) return null;
+          const updated: UserProfile = {
+            ...prev,
+            hasActiveCode: true,
+            activeCashbackCode: detail.code
+          };
+          try {
+            sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updated));
+            saveRegisteredUser(updated);
+          } catch (e) {}
+          return updated;
+        });
+      }
+    };
+    window.addEventListener('palmpay_code_approved', handleCodeApprovedEvent);
+
     return () => {
       unsubUser();
       unsubTx();
       unsubDep();
       unsubWd();
       unsubRef();
+      unsubCodeOrders();
+      window.removeEventListener('palmpay_code_approved', handleCodeApprovedEvent);
     };
   }, [user?.uid, user?.email, user?.role]);
 
@@ -668,6 +730,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             getDoc(doc(db, 'users', parsed.uid)).then(async (docSnap) => {
               if (docSnap.exists()) {
                 const latest = { ...parsed, ...(docSnap.data() as UserProfile) };
+
+                // Verify any approved code orders in Firestore
+                try {
+                  const ordersSnap = await getDocs(collection(db, 'code_orders'));
+                  ordersSnap.forEach((oDoc) => {
+                    const c = oDoc.data() as CodeOrder;
+                    const isTarget = c.uid === latest.uid || (c.userEmail && latest.email && c.userEmail.trim().toLowerCase() === latest.email.trim().toLowerCase());
+                    if (isTarget && c.status === 'approved' && c.generatedCode && !c.generatedCode.toLowerCase().includes('pending')) {
+                      latest.hasActiveCode = true;
+                      latest.activeCashbackCode = c.generatedCode.trim();
+                    }
+                  });
+                } catch (e) {}
+
                 if (!latest.accountNumber) {
                   latest.accountNumber = formatOrGeneratePalmPayAccountNumber(latest.phone, latest.uid);
                   await updateDoc(doc(db, 'users', latest.uid), { accountNumber: latest.accountNumber });
@@ -1511,7 +1587,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!docSnap.exists()) return;
 
       const orderData = docSnap.data() as CodeOrder;
-      const targetUserDoc = await getDoc(doc(db, 'users', orderData.uid));
       
       let finalCode = (customCode || '').trim();
 
@@ -1522,35 +1597,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      if (targetUserDoc.exists()) {
-        const uData = targetUserDoc.data() as UserProfile;
-        if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
-          if (uData.activeCashbackCode && !uData.activeCashbackCode.toLowerCase().includes('pending') && uData.activeCashbackCode.startsWith('palm_')) {
-            finalCode = uData.activeCashbackCode.trim();
-          }
-        }
-      }
-
-      // If still missing or invalid, generate a fresh code in palm_###_cash_### format!
       if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
         finalCode = generateRandomCashbackCode();
       }
 
-      // Update target user document in Firestore
-      if (targetUserDoc.exists()) {
-        await updateDoc(doc(db, 'users', orderData.uid), {
+      // 1. Update target user document in Firestore by UID
+      if (orderData.uid) {
+        await setDoc(doc(db, 'users', orderData.uid), {
           hasActiveCode: true,
           activeCashbackCode: finalCode
-        });
+        }, { merge: true });
       }
 
-      // Update code_orders document in Firestore
+      // 2. Also update all user documents matching orderData.userEmail
+      if (orderData.userEmail) {
+        try {
+          const targetEmail = orderData.userEmail.trim().toLowerCase();
+          const allUsersSnap = await getDocs(collection(db, 'users'));
+          allUsersSnap.forEach(async (uDoc) => {
+            const u = uDoc.data();
+            const uEmail = (u.email || '').trim().toLowerCase();
+            if (uEmail === targetEmail || uDoc.id === orderData.uid) {
+              await setDoc(doc(db, 'users', uDoc.id), {
+                hasActiveCode: true,
+                activeCashbackCode: finalCode
+              }, { merge: true });
+            }
+          });
+        } catch (e) {
+          console.warn('User email query update error:', e);
+        }
+      }
+
+      // 3. Update localStorage registered users map
+      if (orderData.userEmail) {
+        try {
+          const currentRegistry = getRegisteredUsersMap();
+          const emailKey = orderData.userEmail.toLowerCase();
+          const userRec = currentRegistry[emailKey];
+          if (userRec) {
+            userRec.profile.hasActiveCode = true;
+            userRec.profile.activeCashbackCode = finalCode;
+            saveRegisteredUser(userRec.profile, userRec.passwordHash);
+          }
+        } catch (e) {
+          console.warn('LocalStorage registry update note:', e);
+        }
+      }
+
+      // 4. Update code_orders document in Firestore
       await updateDoc(docRef, {
         status: 'approved',
         generatedCode: finalCode,
-        adminNote: customNote || 'CashBack Code Approved and Activated.',
+        adminNote: customNote || `CashBack Code (${finalCode}) Approved and Activated.`,
         approvedAt: Date.now()
       });
+
+      // 5. Broadcast global event so any active window/component instantly updates
+      try {
+        window.dispatchEvent(
+          new CustomEvent('palmpay_code_approved', {
+            detail: {
+              email: orderData.userEmail,
+              uid: orderData.uid,
+              code: finalCode
+            }
+          })
+        );
+      } catch (e) {}
 
       // Update matching transaction in transactions collection if present
       if (orderData.paymentReference) {
@@ -1810,13 +1924,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    if (!user.hasActiveCode || !user.activeCashbackCode || user.activeCashbackCode.toLowerCase().includes('pending')) {
+    let userHasCode = Boolean(user.hasActiveCode && user.activeCashbackCode && !user.activeCashbackCode.toLowerCase().includes('pending'));
+    let assignedCode = (user.activeCashbackCode || '').trim().toLowerCase();
+
+    // Check code_orders in Firestore if user state is not active or does not match
+    if (!userHasCode || cleanCode.toLowerCase() !== assignedCode) {
+      try {
+        const codesSnap = await getDocs(collection(db, 'code_orders'));
+        codesSnap.forEach((docSnap) => {
+          const c = docSnap.data() as CodeOrder;
+          const matches = c.uid === user.uid || (c.userEmail && c.userEmail.toLowerCase() === user.email.toLowerCase());
+          if (matches && c.status === 'approved' && c.generatedCode && !c.generatedCode.toLowerCase().includes('pending')) {
+            const validApproved = c.generatedCode.trim();
+            userHasCode = true;
+            if (cleanCode.toLowerCase() === validApproved.toLowerCase()) {
+              assignedCode = cleanCode.toLowerCase();
+            } else if (!assignedCode || assignedCode.includes('pending')) {
+              assignedCode = validApproved.toLowerCase();
+            }
+            // Auto-activate user
+            setDoc(doc(db, 'users', user.uid), {
+              hasActiveCode: true,
+              activeCashbackCode: validApproved
+            }, { merge: true }).catch(() => {});
+            user.hasActiveCode = true;
+            user.activeCashbackCode = validApproved;
+            setUser({ ...user, hasActiveCode: true, activeCashbackCode: validApproved });
+          }
+        });
+      } catch (err) {
+        console.warn('requestWithdrawal code_orders check note:', err);
+      }
+    }
+
+    if (!userHasCode) {
       throw new Error(
         'Your account does not have an active approved CashBack Code. Please purchase a CashBack Code first and wait for Admin approval before attempting to withdraw.'
       );
     }
 
-    if (cleanCode.toLowerCase() !== user.activeCashbackCode.toLowerCase()) {
+    if (cleanCode.toLowerCase() !== assignedCode) {
       throw new Error(
         `Invalid CashBack Code. The code entered ('${cleanCode}') is not assigned to your account or does not match your active approved CashBack Code.`
       );
