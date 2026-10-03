@@ -28,7 +28,7 @@ import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDetailModal } from './components/NotificationDetailModal';
 import { NavigationPage, PlatformNotification } from './types';
-import { Sparkles, ShieldCheck, KeyRound, Award, Lock } from 'lucide-react';
+import { Sparkles, ShieldCheck, KeyRound, Award, Lock, Snowflake } from 'lucide-react';
 
 const DashboardContent: React.FC<{
   currentPage: NavigationPage;
@@ -281,6 +281,37 @@ const MainAppContent: React.FC = () => {
         onOpenNotifications={() => setCurrentPage('transactions')}
         onSelectNotification={(notif) => setSelectedNotification(notif)}
       />
+
+      {/* Frozen Account Alert Banner */}
+      {user?.isFrozen && (
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 animate-in fade-in">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-cyan-950/80 border border-cyan-500/50 shadow-[0_0_25px_rgba(6,182,212,0.25)] flex items-start sm:items-center justify-between gap-3 text-cyan-200 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300 shrink-0">
+                <Snowflake className="w-5 h-5 animate-spin" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <strong className="text-white text-sm font-bold">Account Access Temporarily Frozen</strong>
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                    RESTRICTED
+                  </span>
+                </div>
+                <p className="text-cyan-200/90 mt-0.5 text-[11px] sm:text-xs">
+                  {user.frozenReason || 'Your account is temporarily frozen by administration. You can view your balance and activity, but withdrawals, deposits, and game transactions are paused.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentPage('support')}
+              className="px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-500/40 text-cyan-300 text-xs font-bold shrink-0 transition-colors"
+            >
+              Contact Support
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Real-time In-App Toast Notification */}
       <NotificationToast

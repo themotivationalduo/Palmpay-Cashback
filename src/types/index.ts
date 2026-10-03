@@ -31,6 +31,9 @@ export interface UserProfile {
   role: 'admin' | 'user';
   hasActiveCode: boolean;
   activeCashbackCode?: string;
+  isFrozen?: boolean;
+  frozenReason?: string;
+  frozenAt?: number;
 }
 
 export interface Transaction {

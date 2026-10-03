@@ -29,7 +29,11 @@ import {
   Check,
   Copy,
   MessageSquare,
-  Send
+  Send,
+  Snowflake,
+  Lock,
+  Unlock,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth, getLocalWithdrawalRequests, generateRandomCashbackCode, generateUniqueCashbackCode } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
@@ -57,6 +61,7 @@ export const AdminPanel: React.FC = () => {
     updateBalance, 
     purgeAllRecords, 
     deleteUserPermanently,
+    toggleFreezeUser,
     approveDepositRequest, 
     rejectDepositRequest, 
     approveWithdrawalRequest,
@@ -80,10 +85,15 @@ export const AdminPanel: React.FC = () => {
   const [approvingWithdrawalId, setApprovingWithdrawalId] = useState<string | null>(null);
   const [withdrawalAlert, setWithdrawalAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // User Deletion state
+  // User Deletion & Freeze state
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState<boolean>(false);
   const [deleteUserFeedback, setDeleteUserFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const [userToFreeze, setUserToFreeze] = useState<UserProfile | null>(null);
+  const [freezeReason, setFreezeReason] = useState<string>('');
+  const [isFreezingUser, setIsFreezingUser] = useState<boolean>(false);
+  const [freezeFeedback, setFreezeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Custom action prompt state for admin custom message/warning
   const [actionPrompt, setActionPrompt] = useState<ActionPromptState | null>(null);
@@ -259,6 +269,66 @@ export const AdminPanel: React.FC = () => {
       setDeleteUserFeedback({ type: 'error', message: err.message || 'Failed to delete user account.' });
     } finally {
       setIsDeletingUser(false);
+    }
+  };
+
+  const handleConfirmFreezeUser = async () => {
+    if (!userToFreeze) return;
+    setIsFreezingUser(true);
+    setFreezeFeedback(null);
+    const targetFreeze = !userToFreeze.isFrozen;
+    try {
+      const res = await toggleFreezeUser(userToFreeze.uid || userToFreeze.email, targetFreeze, freezeReason);
+      setFreezeFeedback({ type: 'success', message: res.message });
+      if (res.updatedUser) {
+        setUsersList((prev) =>
+          prev.map((u) =>
+            u.email.toLowerCase() === res.updatedUser!.email.toLowerCase() || u.uid === res.updatedUser!.uid
+              ? res.updatedUser!
+              : u
+          )
+        );
+        if (selectedUserForOverride?.email.toLowerCase() === res.updatedUser.email.toLowerCase()) {
+          setSelectedUserForOverride(res.updatedUser);
+        }
+      }
+      await refreshUsersList();
+      setUserToFreeze(null);
+      setFreezeReason('');
+      setTimeout(() => setFreezeFeedback(null), 5000);
+    } catch (err: any) {
+      setFreezeFeedback({ type: 'error', message: err.message || 'Failed to update account freeze state.' });
+    } finally {
+      setIsFreezingUser(false);
+    }
+  };
+
+  const handleQuickToggleFreeze = async (u: UserProfile, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (u.email?.toLowerCase() === 'themotivationalduo@gmail.com') {
+      alert('Super Admin account cannot be frozen.');
+      return;
+    }
+    const targetFreeze = !u.isFrozen;
+    try {
+      const res = await toggleFreezeUser(u.uid || u.email, targetFreeze);
+      setFreezeFeedback({ type: 'success', message: res.message });
+      if (res.updatedUser) {
+        setUsersList((prev) =>
+          prev.map((item) =>
+            item.email.toLowerCase() === res.updatedUser!.email.toLowerCase() || item.uid === res.updatedUser!.uid
+              ? res.updatedUser!
+              : item
+          )
+        );
+        if (selectedUserForOverride?.email.toLowerCase() === res.updatedUser.email.toLowerCase()) {
+          setSelectedUserForOverride(res.updatedUser);
+        }
+      }
+      await refreshUsersList();
+      setTimeout(() => setFreezeFeedback(null), 5000);
+    } catch (err: any) {
+      setFreezeFeedback({ type: 'error', message: err.message || 'Failed to toggle account freeze state.' });
     }
   };
 
@@ -1303,13 +1373,19 @@ export const AdminPanel: React.FC = () => {
                         }`}
                       >
                         <div className="space-y-1 min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-xs sm:text-sm text-white truncate">
                               {u.displayName || 'Unnamed User'}
                             </span>
                             {u.role === 'admin' && (
                               <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-[#FFC107] border border-amber-500/40">
                                 ADMIN
+                              </span>
+                            )}
+                            {u.isFrozen && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                                <Snowflake className="w-2.5 h-2.5 animate-spin" />
+                                FROZEN
                               </span>
                             )}
                           </div>
@@ -1334,17 +1410,35 @@ export const AdminPanel: React.FC = () => {
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           {u.email?.toLowerCase() !== 'themotivationalduo@gmail.com' && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUserToDelete(u);
-                              }}
-                              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 border border-red-500/20 transition-all active:scale-95"
-                              title="Permanently Delete Account from Firebase Firestore & Storage"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUserToFreeze(u);
+                                  setFreezeReason(u.frozenReason || '');
+                                }}
+                                className={`p-2 rounded-lg border transition-all active:scale-95 ${
+                                  u.isFrozen
+                                    ? 'bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 border-cyan-500/40'
+                                    : 'bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-300 hover:text-white border-cyan-500/20'
+                                }`}
+                                title={u.isFrozen ? "Unfreeze Account (Restore Access)" : "Freeze Account (Temporarily Suspend)"}
+                              >
+                                {u.isFrozen ? <Unlock className="w-3.5 h-3.5 text-cyan-300" /> : <Snowflake className="w-3.5 h-3.5 text-cyan-400" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUserToDelete(u);
+                                }}
+                                className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 border border-red-500/20 transition-all active:scale-95"
+                                title="Permanently Delete Account from Firebase Firestore & Storage"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -1388,6 +1482,21 @@ export const AdminPanel: React.FC = () => {
                 </div>
               )}
 
+              {freezeFeedback && (
+                <div className={`p-3 rounded-xl border text-xs flex items-center gap-2 animate-in fade-in ${
+                  freezeFeedback.type === 'success'
+                    ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-200'
+                    : 'bg-red-500/20 border-red-500/40 text-red-200'
+                }`}>
+                  {freezeFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                  )}
+                  <span>{freezeFeedback.message}</span>
+                </div>
+              )}
+
               <form onSubmit={handleExecuteOverrideBalance} className="space-y-4">
                 
                 {/* Target User Account Email */}
@@ -1411,11 +1520,58 @@ export const AdminPanel: React.FC = () => {
 
                 {/* Target User Current Balances Snapshot */}
                 {selectedUserForOverride && (
-                  <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-2">
+                  <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/30 space-y-2.5">
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-300">Selected User:</span>
                       <strong className="text-white">{selectedUserForOverride.displayName || 'PalmPay Member'}</strong>
                     </div>
+
+                    {/* Account Status Badge & Freeze Toggle */}
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#0A0D0F]/80 border border-white/10 text-xs">
+                      <div className="flex items-center gap-2">
+                        {selectedUserForOverride.isFrozen ? (
+                          <>
+                            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+                            <span className="text-cyan-300 font-bold flex items-center gap-1">
+                              <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                              FROZEN (Suspended)
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                            <span className="text-emerald-300 font-bold">Status: ACTIVE 🟢</span>
+                          </>
+                        )}
+                      </div>
+                      {selectedUserForOverride.email?.toLowerCase() !== 'themotivationalduo@gmail.com' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUserToFreeze(selectedUserForOverride);
+                            setFreezeReason(selectedUserForOverride.frozenReason || '');
+                          }}
+                          className={`px-3 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 ${
+                            selectedUserForOverride.isFrozen
+                              ? 'bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-200 border border-cyan-500/40'
+                              : 'bg-cyan-500/10 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30'
+                          }`}
+                        >
+                          {selectedUserForOverride.isFrozen ? (
+                            <>
+                              <Unlock className="w-3.5 h-3.5 text-cyan-300" />
+                              <span>Unfreeze Account</span>
+                            </>
+                          ) : (
+                            <>
+                              <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Freeze Account</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
                       <div className="p-2 rounded-lg bg-[#0A0D0F]/80 border border-white/5">
                         <span className="text-[10px] text-purple-300 block">Current CashBack Bal</span>
@@ -2372,6 +2528,158 @@ export const AdminPanel: React.FC = () => {
                   <>
                     <Trash2 className="w-4 h-4 text-white" />
                     <span>Delete Account Permanently</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Freeze / Unfreeze Account Modal */}
+      {userToFreeze && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="mirror-glass-card rounded-3xl p-5 sm:p-7 max-w-lg w-full border-2 border-cyan-500/60 shadow-[0_0_50px_rgba(6,182,212,0.3)] relative overflow-hidden space-y-4">
+            
+            {/* Top Cyan Glow Accent */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-400 animate-pulse" />
+
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 shrink-0">
+                  {userToFreeze.isFrozen ? <Unlock className="w-6 h-6" /> : <Snowflake className="w-6 h-6" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-white font-['Poppins',sans-serif]">
+                      {userToFreeze.isFrozen ? 'Unfreeze User Account' : 'Freeze User Account'}
+                    </h3>
+                    <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${
+                      userToFreeze.isFrozen
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                    }`}>
+                      {userToFreeze.isFrozen ? 'RESTORE ACCESS' : 'TEMPORARY SUSPENSION'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-cyan-200/90 mt-0.5">
+                    {userToFreeze.isFrozen
+                      ? 'Reactivate normal platform access and transactions for this user.'
+                      : 'Temporarily disable withdrawals, deposits, and game activity without deleting data.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUserToFreeze(null)}
+                disabled={isFreezingUser}
+                className="p-1.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target User Account Profile Summary */}
+            <div className="p-4 rounded-2xl bg-[#0A0D0F] border border-cyan-500/30 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Account Name:</span>
+                <strong className="text-white text-sm">{userToFreeze.displayName || 'PalmPay Member'}</strong>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Email Address:</span>
+                <span className="text-amber-300 font-mono font-bold">{userToFreeze.email}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">PalmPay Account / Phone:</span>
+                <span className="text-cyan-300 font-mono font-bold">{userToFreeze.accountNumber || userToFreeze.phone || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">Current Status:</span>
+                <span className={userToFreeze.isFrozen ? "text-cyan-300 font-bold" : "text-emerald-400 font-bold"}>
+                  {userToFreeze.isFrozen ? '❄️ FROZEN' : '🟢 ACTIVE'}
+                </span>
+              </div>
+
+              {/* Balances (Preserved safely) */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-xs">
+                <div className="p-2 rounded-xl bg-white/5 text-center">
+                  <span className="text-[10px] text-purple-300 block uppercase">CashBack Balance</span>
+                  <span className="font-bold text-amber-400 font-mono text-sm">
+                    ₦{(userToFreeze.balance ?? 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-white/5 text-center">
+                  <span className="text-[10px] text-emerald-300 block uppercase">Deposited Balance</span>
+                  <span className="font-bold text-[#00B875] font-mono text-sm">
+                    ₦{(userToFreeze.depositBalance ?? 0).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Explanatory Notice */}
+            <div className="p-3.5 rounded-2xl bg-cyan-950/40 border border-cyan-500/40 text-xs text-cyan-200 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+                <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span>{userToFreeze.isFrozen ? 'Effect of Unfreezing Account:' : 'Effect of Freezing Account:'}</span>
+              </div>
+              {userToFreeze.isFrozen ? (
+                <p className="text-[11px] text-cyan-200/90 leading-relaxed">
+                  User will immediately regain the ability to request withdrawals, make wallet deposits, and participate in games. All stored funds and history remain intact.
+                </p>
+              ) : (
+                <ul className="list-disc list-inside space-y-1 text-[11px] text-cyan-200/90 pl-1">
+                  <li>Withdrawals and payouts are <strong>temporarily blocked</strong>.</li>
+                  <li>Deposits, game spins, and code orders are suspended.</li>
+                  <li>Account data, balance, and transaction history are <strong>safely preserved</strong> (NOT deleted).</li>
+                  <li>You can unfreeze and restore full access anytime in 1-click.</li>
+                </ul>
+              )}
+            </div>
+
+            {/* Optional Reason / Note Input */}
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Administrative Note / Reason (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder={userToFreeze.isFrozen ? "e.g. Identity verified / review cleared" : "e.g. Under administrative review / suspicious activity"}
+                value={freezeReason}
+                onChange={(e) => setFreezeReason(e.target.value)}
+                className="w-full bg-[#121922] text-white text-xs rounded-xl p-3 border border-white/15 focus:outline-none focus:border-cyan-500 transition-colors"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isFreezingUser}
+                onClick={() => setUserToFreeze(null)}
+                className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isFreezingUser}
+                onClick={handleConfirmFreezeUser}
+                className={`flex-1 py-3 rounded-2xl font-extrabold text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 ${
+                  userToFreeze.isFrozen
+                    ? 'bg-gradient-to-r from-emerald-600 via-[#00B875] to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 text-white'
+                    : 'bg-gradient-to-r from-cyan-600 via-blue-600 to-cyan-500 hover:from-cyan-500 hover:to-blue-500 text-white'
+                }`}
+              >
+                {isFreezingUser ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Updating state...</span>
+                  </>
+                ) : (
+                  <>
+                    {userToFreeze.isFrozen ? <Unlock className="w-4 h-4 text-white" /> : <Snowflake className="w-4 h-4 text-white" />}
+                    <span>{userToFreeze.isFrozen ? 'Unfreeze Account (Restore Access)' : 'Freeze Account (Suspend Access)'}</span>
                   </>
                 )}
               </button>

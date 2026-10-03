@@ -64,6 +64,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; message: string; updatedUser?: UserProfile }>;
   getAllUsersForAdmin: () => Promise<UserProfile[]>;
   deleteUserPermanently: (targetUidOrEmail: string) => Promise<{ success: boolean; message: string }>;
+  toggleFreezeUser: (targetUidOrEmail: string, freeze: boolean, reason?: string) => Promise<{ success: boolean; message: string; isFrozen: boolean; updatedUser?: UserProfile }>;
 
   // Bonuses
   claimSignupBonus: () => Promise<boolean>;
@@ -1591,6 +1592,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Buy Cashback code via Paystack payment link
   const buyCashbackCode = async (receiptImage: string): Promise<string> => {
     if (!user) throw new Error('User not logged in');
+    if (user.isFrozen) {
+      throw new Error('Your account is currently frozen by administration. Code purchases are disabled. Please contact support.');
+    }
     if (!receiptImage) throw new Error('Please upload your transaction receipt image.');
 
     const txRef = 'PAYSTACK-' + Date.now();
@@ -1646,6 +1650,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Buy Cashback code directly from Deposited Balance (₦8,550)
   const buyCashbackCodeWithDepositBalance = async (): Promise<string> => {
     if (!user) throw new Error('User not logged in');
+    if (user.isFrozen) {
+      throw new Error('Your account is currently frozen by administration. Code purchases are disabled. Please contact support.');
+    }
     const currentDep = user.depositBalance || 0;
     if (currentDep < 8550) {
       throw new Error(`Insufficient deposited balance (Available: ₦${currentDep.toLocaleString()}). You need ₦8,550 to purchase a CashBack code.`);
@@ -1687,6 +1694,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Activate / Manual submit Cashback code
   const activateCashbackCode = async (code: string): Promise<boolean> => {
     if (!user) throw new Error('User not logged in');
+    if (user.isFrozen) {
+      throw new Error('Your account is currently frozen by administration. Code activation is disabled. Please contact support.');
+    }
     const cleanCode = code.trim();
 
     if (!cleanCode || cleanCode.length < 5) {
@@ -1962,6 +1972,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     paymentReference?: string;
   }): Promise<string> => {
     if (!user) throw new Error('User not logged in');
+    if (user.isFrozen) {
+      throw new Error('Your account is currently frozen by administration. Deposits are disabled. Please contact support.');
+    }
     if (!details.amount || details.amount < 500) {
       throw new Error('Minimum deposit amount is ₦500.');
     }
@@ -2104,6 +2117,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     receiptImage?: string;
   }): Promise<string> => {
     if (!user) throw new Error('User not logged in');
+    if (user.isFrozen) {
+      throw new Error('Your account is currently frozen by administration. Withdrawals and payouts are temporarily disabled. Please contact support.');
+    }
 
     const cleanCode = (details.cashbackCode || '').trim();
     if (!cleanCode) {
@@ -2778,6 +2794,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  const toggleFreezeUser = async (
+    targetUidOrEmail: string,
+    freeze: boolean,
+    reason?: string
+  ): Promise<{ success: boolean; message: string; isFrozen: boolean; updatedUser?: UserProfile }> => {
+    const queryTerm = (targetUidOrEmail || '').trim().toLowerCase();
+    if (!queryTerm) {
+      throw new Error('Please specify a valid user email or UID.');
+    }
+
+    if (queryTerm === ADMIN_CREDENTIALS.email.toLowerCase() && freeze) {
+      throw new Error('Super Admin account (Mathias Danlami) cannot be frozen.');
+    }
+
+    setLoading(true);
+    try {
+      let targetProfile: UserProfile | null = null;
+      let targetUid = '';
+      const registry = getRegisteredUsersMap();
+
+      // 1. Locate in local registry
+      for (const email of Object.keys(registry)) {
+        if (
+          email.toLowerCase() === queryTerm ||
+          (registry[email]?.profile?.uid && registry[email].profile.uid.toLowerCase() === queryTerm)
+        ) {
+          targetProfile = registry[email].profile;
+          targetUid = targetProfile.uid;
+          break;
+        }
+      }
+
+      // 2. Locate in Firestore users collection
+      try {
+        const usersSnap = await withTimeout(getDocs(collection(db, 'users')), 2000);
+        if (usersSnap) {
+          for (const docSnap of usersSnap.docs) {
+            const u = docSnap.data() as UserProfile;
+            const uUid = String(u.uid || docSnap.id).toLowerCase();
+            const uEmail = String(u.email || '').toLowerCase();
+            if (docSnap.id.toLowerCase() === queryTerm || uUid === queryTerm || uEmail === queryTerm) {
+              if (!targetProfile) targetProfile = { ...u, uid: u.uid || docSnap.id };
+              if (!targetUid) targetUid = docSnap.id;
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore user lookup note:', e);
+      }
+
+      if (!targetProfile) {
+        targetProfile = {
+          uid: targetUid || queryTerm,
+          email: queryTerm.includes('@') ? queryTerm : `${queryTerm}@palmpay.user`,
+          displayName: 'PalmPay Member',
+          balance: 0,
+          depositBalance: 0,
+          referralCode: 'PALM' + Math.random().toString(36).substring(2, 6).toUpperCase(),
+          referralCount: 0,
+          signupBonusClaimed: false,
+          memberSince: 'Oct 2026',
+          role: 'user',
+          hasActiveCode: false
+        };
+      }
+
+      const finalUid = targetUid || targetProfile.uid || queryTerm;
+      const finalEmail = targetProfile.email.toLowerCase();
+
+      const updatedProfile: UserProfile = {
+        ...targetProfile,
+        isFrozen: freeze,
+        frozenReason: freeze ? (reason || 'Account temporarily frozen by Administration') : undefined,
+        frozenAt: freeze ? Date.now() : undefined
+      };
+
+      // 3. Update Firestore document
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, 'users', finalUid),
+            {
+              isFrozen: freeze,
+              frozenReason: freeze ? (reason || 'Account temporarily frozen by Administration') : null,
+              frozenAt: freeze ? Date.now() : null
+            },
+            { merge: true }
+          ),
+          2000
+        );
+      } catch (fsErr) {
+        console.warn('Firestore user freeze update note:', fsErr);
+      }
+
+      // 4. Update local registry
+      saveRegisteredUser(updatedProfile);
+
+      // 5. If target is active session user, update active user state
+      if (user && (user.uid === finalUid || user.email.toLowerCase() === finalEmail)) {
+        setUser(updatedProfile);
+        try {
+          sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(updatedProfile));
+        } catch {}
+      }
+
+      const actionText = freeze ? 'frozen (temporarily disabled)' : 'unfrozen (access restored)';
+      return {
+        success: true,
+        message: `Account for ${updatedProfile.displayName || updatedProfile.email} has been successfully ${actionText}.`,
+        isFrozen: freeze,
+        updatedUser: updatedProfile
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getAllUsersForAdmin = async (): Promise<UserProfile[]> => {
     const usersMap: Record<string, UserProfile> = {};
 
@@ -2837,6 +2971,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateDepositBalance,
         overrideUserBalance,
         getAllUsersForAdmin,
+        toggleFreezeUser,
         claimSignupBonus,
         claimDailyBonus,
         buyCashbackCode,
