@@ -27,12 +27,14 @@ import { CommunityModal, AddMoneyModal, SupportModal } from './components/Modals
 import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
 import { NotificationDetailModal } from './components/NotificationDetailModal';
-import { NavigationPage, PlatformNotification } from './types';
+import { NavigationPage, PlatformNotification, AdminSubPage } from './types';
 import { Sparkles, ShieldCheck, KeyRound, Award, Lock, Snowflake } from 'lucide-react';
 
 const DashboardContent: React.FC<{
   currentPage: NavigationPage;
   setCurrentPage: (page: NavigationPage) => void;
+  adminSubPage: AdminSubPage;
+  setAdminSubPage: (page: AdminSubPage) => void;
   onOpenWithdrawal: () => void;
   onOpenBuyCode: () => void;
   onOpenAddMoney: () => void;
@@ -43,6 +45,8 @@ const DashboardContent: React.FC<{
 }> = ({
   currentPage,
   setCurrentPage,
+  adminSubPage,
+  setAdminSubPage,
   onOpenWithdrawal,
   onOpenBuyCode,
   onOpenAddMoney,
@@ -178,7 +182,11 @@ const DashboardContent: React.FC<{
       {/* 11. Admin Panel View */}
       {currentPage === 'admin' && (
         <div className="animate-in fade-in duration-300">
-          <AdminPanel />
+          <AdminPanel
+            activeSubPage={adminSubPage}
+            onSubPageChange={setAdminSubPage}
+            onNavigateHome={() => setCurrentPage('dashboard')}
+          />
         </div>
       )}
     </main>
@@ -205,6 +213,7 @@ const MainAppContent: React.FC = () => {
   const { user, activeToast, setActiveToast } = useAuth();
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [currentPage, setCurrentPageState] = useState<NavigationPage>(() => getPageFromPath());
+  const [adminSubPage, setAdminSubPage] = useState<AdminSubPage>('overview');
   const [selectedNotification, setSelectedNotification] = useState<PlatformNotification | null>(null);
   
   const [showWAModal, setShowWAModal] = useState<boolean>(false);
@@ -335,6 +344,8 @@ const MainAppContent: React.FC = () => {
           <DashboardContent
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
+            adminSubPage={adminSubPage}
+            setAdminSubPage={setAdminSubPage}
             onOpenWithdrawal={() => setCurrentPage('withdraw')}
             onOpenBuyCode={() => setCurrentPage('buy-code')}
             onOpenAddMoney={() => setCurrentPage('add-money')}
@@ -348,6 +359,8 @@ const MainAppContent: React.FC = () => {
           <FloatingBottomNav
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
+            adminSubPage={adminSubPage}
+            setAdminSubPage={setAdminSubPage}
             onOpenProfile={() => setCurrentPage('profile')}
           />
 

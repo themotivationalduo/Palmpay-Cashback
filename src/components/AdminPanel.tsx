@@ -22,6 +22,8 @@ import {
   Users,
   Sliders,
   ArrowRight,
+  ArrowLeft,
+  LayoutGrid,
   Edit3,
   Globe,
   Server,
@@ -38,7 +40,7 @@ import {
 import { useAuth, getLocalWithdrawalRequests, generateRandomCashbackCode, generateUniqueCashbackCode } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { db, collection, query, onSnapshot, updateDoc, doc, addDoc, getDocs } from '../lib/firebase';
-import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile } from '../types';
+import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile, AdminSubPage } from '../types';
 
 export interface ActionPromptState {
   isOpen: boolean;
@@ -55,7 +57,17 @@ export interface ActionPromptState {
   isWarning: boolean;
 }
 
-export const AdminPanel: React.FC = () => {
+export interface AdminPanelProps {
+  activeSubPage?: AdminSubPage;
+  onSubPageChange?: (page: AdminSubPage) => void;
+  onNavigateHome?: () => void;
+}
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({
+  activeSubPage,
+  onSubPageChange,
+  onNavigateHome
+}) => {
   const { 
     user, 
     updateBalance, 
@@ -75,7 +87,16 @@ export const AdminPanel: React.FC = () => {
   } = useAuth();
   const { triggerCelebration } = useCelebration();
 
-  const [tab, setTab] = useState<'deposits' | 'withdrawals' | 'codes' | 'balance' | 'announcements' | 'gateway'>('deposits');
+  const [internalPage, setInternalPage] = useState<AdminSubPage>('overview');
+  const currentPage: AdminSubPage = activeSubPage || internalPage;
+
+  const navigateToPage = (targetPage: AdminSubPage) => {
+    setInternalPage(targetPage);
+    if (onSubPageChange) {
+      onSubPageChange(targetPage);
+    }
+  };
+
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>(() => {
     return getLocalWithdrawalRequests();
   });
@@ -221,10 +242,10 @@ export const AdminPanel: React.FC = () => {
   };
 
   useEffect(() => {
-    if (tab === 'gateway') {
+    if (currentPage === 'gateway') {
       fetchGatewayConfig();
     }
-  }, [tab]);
+  }, [currentPage]);
 
   const refreshUsersList = async () => {
     setUsersLoading(true);
@@ -239,10 +260,10 @@ export const AdminPanel: React.FC = () => {
   };
 
   useEffect(() => {
-    if (tab === 'balance') {
+    if (currentPage === 'users' || currentPage === 'overview') {
       refreshUsersList();
     }
-  }, [tab]);
+  }, [currentPage]);
 
   const handleSelectUserToOverride = (u: UserProfile) => {
     setSelectedUserForOverride(u);
@@ -588,10 +609,10 @@ export const AdminPanel: React.FC = () => {
   const pendingWithdrawalsCount = withdrawals.filter((w) => w.status === 'pending').length;
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in min-w-0 overflow-x-hidden">
+    <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in min-w-0 overflow-x-hidden pb-12">
       
-      {/* Admin Header Banner */}
-      <div className="mirror-glass-card rounded-2xl sm:rounded-3xl p-3 sm:p-7 border border-amber-500/30 shadow-2xl relative overflow-hidden">
+      {/* 1. Admin Header Banner */}
+      <div className="mirror-glass-card rounded-2xl sm:rounded-3xl p-3.5 sm:p-7 border border-amber-500/30 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
@@ -603,7 +624,7 @@ export const AdminPanel: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg sm:text-2xl font-black text-white font-['Poppins',sans-serif] truncate">
+                <h2 className="text-base sm:text-2xl font-black text-white font-['Poppins',sans-serif] truncate">
                   PalmPay Admin Control Center
                 </h2>
                 <span className="text-[9px] sm:text-[10px] font-black uppercase bg-amber-500/20 text-[#FFC107] border border-amber-500/40 px-2 py-0.5 rounded-full">
@@ -618,14 +639,22 @@ export const AdminPanel: React.FC = () => {
 
           {/* Quick Metrics & Purge Action */}
           <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <div className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-emerald-500/30 text-center">
+            <div 
+              onClick={() => navigateToPage('deposits')}
+              className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-emerald-500/30 text-center cursor-pointer hover:bg-emerald-950/20 transition-all"
+              title="Click to view Deposit Approvals page"
+            >
               <span className="text-[9px] sm:text-[10px] text-emerald-300 block uppercase">Pending Deposits</span>
               <span className="text-sm sm:text-base font-bold text-[#00B875] font-mono">
                 {pendingDepositsCount}
               </span>
             </div>
 
-            <div className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-purple-500/20 text-center">
+            <div 
+              onClick={() => navigateToPage('withdrawals')}
+              className="mirror-glass px-2.5 sm:px-3.5 py-2 rounded-xl border border-purple-500/20 text-center cursor-pointer hover:bg-purple-950/20 transition-all"
+              title="Click to view Withdrawal Approvals page"
+            >
               <span className="text-[9px] sm:text-[10px] text-purple-300/80 block uppercase">Pending Payouts</span>
               <span className="text-sm sm:text-base font-bold text-amber-400 font-mono">
                 {pendingWithdrawalsCount}
@@ -651,257 +680,685 @@ export const AdminPanel: React.FC = () => {
         )}
       </div>
 
-      {/* Admin Navigation Tabs */}
-      <div className="w-full min-w-0 max-w-full overflow-x-auto pb-2 flex items-center gap-2 border-b border-purple-500/20">
-        <button
-          onClick={() => setTab('deposits')}
-          className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'deposits'
-              ? 'bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white shadow-md'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Wallet className="w-4 h-4" />
-          <span>Pending Deposits ({pendingDepositsCount})</span>
-        </button>
+      {/* 2. Admin Workspace Navigation Launcher (When on Overview Hub) */}
+      {currentPage === 'overview' && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-2">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2 font-['Poppins',sans-serif]">
+                <LayoutGrid className="w-4 h-4 text-[#FFC107]" />
+                <span>Admin Management Pages</span>
+              </h3>
+              <p className="text-xs text-purple-200/80 mt-0.5">
+                Each management workspace is separated into its own dedicated page. Tap any button below to open.
+              </p>
+            </div>
+            {onNavigateHome && (
+              <button
+                type="button"
+                onClick={onNavigateHome}
+                className="self-start sm:self-auto px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-xs text-purple-200 hover:text-white border border-purple-500/30 transition-all font-semibold flex items-center gap-1.5"
+              >
+                <span>Return to User Dashboard</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
-        <button
-          onClick={() => setTab('withdrawals')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'withdrawals'
-              ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" />
-          <span>Withdrawal Approvals ({pendingWithdrawalsCount})</span>
-        </button>
-
-        <button
-          onClick={() => setTab('codes')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'codes'
-              ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <KeyRound className="w-4 h-4" />
-          <span>CashBack Code Orders ({codes.length})</span>
-        </button>
-
-        <button
-          onClick={() => setTab('balance')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'balance'
-              ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-[#7E1DC6] text-white shadow-md ring-2 ring-amber-400/50'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Sliders className="w-4 h-4 text-amber-400" />
-          <span>User Accounts &amp; Balances</span>
-        </button>
-
-        <button
-          onClick={() => setTab('announcements')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'announcements'
-              ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white shadow-md'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Bell className="w-4 h-4" />
-          <span>Banner Broadcaster</span>
-        </button>
-
-        <button
-          onClick={() => setTab('gateway')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap shrink-0 ${
-            tab === 'gateway'
-              ? 'bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white shadow-md ring-1 ring-cyan-400/50'
-              : 'text-purple-300/70 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Globe className="w-4 h-4 text-cyan-400" />
-          <span>PalmPay API Gateway</span>
-        </button>
-      </div>
-
-      {/* Filter Status Selector for Deposits / Withdrawals */}
-      {(tab === 'deposits' || tab === 'withdrawals') && (
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
-            <span>{tab === 'deposits' ? 'Pending Deposits Queue & Receipt Inspection' : 'Withdrawal Requests Queue'}</span>
-          </h3>
-
-          <div className="flex items-center gap-1 bg-[#121922] p-1 rounded-xl border border-white/10 text-xs">
+          {/* Arranged Buttons Grid for Mobile & Desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
+            
+            {/* Page 1: Withdrawals */}
             <button
-              onClick={() => setFilterStatus('all')}
-              className={`px-2.5 py-1 rounded-lg ${filterStatus === 'all' ? 'bg-white/15 text-white font-bold' : 'text-slate-400'}`}
+              type="button"
+              onClick={() => navigateToPage('withdrawals')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-amber-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
             >
-              All
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#0F081D] flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-[#FFC107]" />
+                  </div>
+                </div>
+                {pendingWithdrawalsCount > 0 ? (
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/25 text-[#FFC107] border border-amber-500/40 animate-pulse">
+                    {pendingWithdrawalsCount} PENDING
+                  </span>
+                ) : (
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    CLEARED
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-[#FFC107] transition-colors truncate">
+                  Withdrawal Approvals
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  Review withdrawal queue, approve &amp; disburse payouts to PalmPay accounts.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-[#FFC107] font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
+
+            {/* Page 2: Deposits */}
             <button
-              onClick={() => setFilterStatus('pending')}
-              className={`px-2.5 py-1 rounded-lg ${filterStatus === 'pending' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-400'}`}
+              type="button"
+              onClick={() => navigateToPage('deposits')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-emerald-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
             >
-              Pending
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 via-[#00B875] to-teal-400 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#081812] flex items-center justify-center">
+                    <Wallet className="w-5 h-5 sm:w-6 sm:h-6 text-[#00B875]" />
+                  </div>
+                </div>
+                {pendingDepositsCount > 0 ? (
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/25 text-[#00B875] border border-emerald-500/40 animate-pulse">
+                    {pendingDepositsCount} PENDING
+                  </span>
+                ) : (
+                  <span className="text-[9px] sm:text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    ALL REVIEWED
+                  </span>
+                )}
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-emerald-400 transition-colors truncate">
+                  Deposit Approvals
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  Inspect proof-of-payment receipts, approve and credit user deposit balances.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-emerald-400 font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
+
+            {/* Page 3: Users & Balances */}
             <button
-              onClick={() => setFilterStatus('approved')}
-              className={`px-2.5 py-1 rounded-lg ${filterStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'text-slate-400'}`}
+              type="button"
+              onClick={() => navigateToPage('users')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-amber-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
             >
-              Approved
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-purple-600 via-[#7E1DC6] to-pink-500 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#140822] flex items-center justify-center">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 text-purple-300" />
+                  </div>
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30">
+                  {usersList.length} USERS
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-purple-300 transition-colors truncate">
+                  Users &amp; Balances
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  User accounts directory, Freeze/Unfreeze toggle, live balance adjustments &amp; deletion.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-purple-300 font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
+
+            {/* Page 4: CashBack Code Orders */}
             <button
-              onClick={() => setFilterStatus('rejected')}
-              className={`px-2.5 py-1 rounded-lg ${filterStatus === 'rejected' ? 'bg-red-500/20 text-red-300 font-bold' : 'text-slate-400'}`}
+              type="button"
+              onClick={() => navigateToPage('codes')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-yellow-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
             >
-              Rejected
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-yellow-600 via-[#FFC107] to-amber-300 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#1E1605] flex items-center justify-center">
+                    <KeyRound className="w-5 h-5 sm:w-6 sm:h-6 text-[#FFC107]" />
+                  </div>
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-yellow-500/20 text-[#FFC107] border border-yellow-500/40">
+                  {codes.length} ORDERS
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-[#FFC107] transition-colors truncate">
+                  CashBack Codes
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  Review ₦8,550 activation code orders, verify Paystack proofs, and assign active codes.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-[#FFC107] font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
             </button>
+
+            {/* Page 5: Announcement Broadcaster */}
+            <button
+              type="button"
+              onClick={() => navigateToPage('announcements')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-purple-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
+            >
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#120B20] flex items-center justify-center">
+                    <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-purple-300" />
+                  </div>
+                </div>
+                <span className="text-[9px] sm:text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                  ACTIVE
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-purple-300 transition-colors truncate">
+                  Banner Broadcaster
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  Broadcast live platform security alerts and news ticker to all user devices.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-purple-300 font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+
+            {/* Page 6: PalmPay API Gateway */}
+            <button
+              type="button"
+              onClick={() => navigateToPage('gateway')}
+              className="mirror-glass-card rounded-2xl p-4 sm:p-5 border border-purple-500/30 hover:border-cyan-400/50 text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-95 group flex flex-col justify-between shadow-lg relative overflow-hidden"
+            >
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 via-blue-600 to-indigo-600 p-[1.5px] shadow-md group-hover:scale-105 transition-transform shrink-0">
+                  <div className="w-full h-full rounded-2xl bg-[#061822] flex items-center justify-center">
+                    <Globe className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400" />
+                  </div>
+                </div>
+                <span className={`text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                  gatewayConfig?.mode === 'live_remote'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                }`}>
+                  {gatewayConfig?.mode === 'live_remote' ? 'LIVE' : 'TEST API'}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm sm:text-base font-bold text-white group-hover:text-cyan-400 transition-colors truncate">
+                  PalmPay API Gateway
+                </h4>
+                <p className="text-[11px] text-purple-200/80 line-clamp-2">
+                  Configure server-to-server disbursal endpoints and test connectivity in real-time.
+                </p>
+              </div>
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-xs text-cyan-400 font-semibold">
+                <span>Open Page</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </button>
+
           </div>
         </div>
       )}
 
-      {/* TAB 0: Deposit Approvals (Receipt Review) */}
-      {tab === 'deposits' && (
-        <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
-          <div className="min-w-[950px] divide-y divide-white/5">
+      {/* 3. Dedicated Page Header & Mobile-arranged Page Buttons (When viewing a specific subpage) */}
+      {currentPage !== 'overview' && (
+        <div className="space-y-3 animate-in fade-in">
+          
+          {/* Top Page Breadcrumb Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2 border-b border-purple-500/20">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigateToPage('overview')}
+                className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 text-xs text-white border border-purple-400/30 flex items-center gap-1.5 transition-all active:scale-95 shadow-sm font-bold"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-[#FFC107]" />
+                <span>Admin Hub</span>
+              </button>
+
+              <div className="h-4 w-[1px] bg-white/20 mx-1 hidden sm:block" />
+
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-lg font-black text-white font-['Poppins',sans-serif] flex items-center gap-1.5">
+                  {currentPage === 'withdrawals' && <DollarSign className="w-4 h-4 text-[#FFC107]" />}
+                  {currentPage === 'deposits' && <Wallet className="w-4 h-4 text-[#00B875]" />}
+                  {currentPage === 'users' && <Users className="w-4 h-4 text-purple-400" />}
+                  {currentPage === 'codes' && <KeyRound className="w-4 h-4 text-[#FFC107]" />}
+                  {currentPage === 'announcements' && <Bell className="w-4 h-4 text-purple-300" />}
+                  {currentPage === 'gateway' && <Globe className="w-4 h-4 text-cyan-400" />}
+
+                  <span>
+                    {currentPage === 'withdrawals' && 'Withdrawal Approvals'}
+                    {currentPage === 'deposits' && 'Deposit Approvals'}
+                    {currentPage === 'users' && 'User Accounts & Balances'}
+                    {currentPage === 'codes' && 'CashBack Code Orders'}
+                    {currentPage === 'announcements' && 'Banner Broadcaster'}
+                    {currentPage === 'gateway' && 'PalmPay API Gateway'}
+                  </span>
+                </h3>
+
+                {currentPage === 'withdrawals' && pendingWithdrawalsCount > 0 && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-[#FFC107] border border-amber-500/40">
+                    {pendingWithdrawalsCount} PENDING
+                  </span>
+                )}
+                {currentPage === 'deposits' && pendingDepositsCount > 0 && (
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-[#00B875] border border-emerald-500/40">
+                    {pendingDepositsCount} PENDING
+                  </span>
+                )}
+                {currentPage === 'users' && (
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                    {usersList.length} TOTAL
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {onNavigateHome && (
+              <button
+                type="button"
+                onClick={onNavigateHome}
+                className="px-2.5 py-1 rounded-xl text-[11px] text-purple-300 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1"
+              >
+                <span>User App</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick-switch buttons strip - Arranged cleanly for mobile view */}
+          <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => navigateToPage('withdrawals')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'withdrawals'
+                  ? 'bg-gradient-to-r from-[#621494] via-[#7E1DC6] to-[#9333EA] text-white border-purple-300/40 shadow-md ring-1 ring-purple-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <DollarSign className="w-3.5 h-3.5 shrink-0 text-[#FFC107]" />
+              <span className="truncate">Withdraw ({pendingWithdrawalsCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToPage('deposits')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'deposits'
+                  ? 'bg-gradient-to-r from-[#008f5a] to-[#00B875] text-white border-emerald-300/40 shadow-md ring-1 ring-emerald-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <Wallet className="w-3.5 h-3.5 shrink-0 text-[#00B875]" />
+              <span className="truncate">Deposit ({pendingDepositsCount})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToPage('users')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'users'
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-[#7E1DC6] text-white border-amber-300/40 shadow-md ring-1 ring-amber-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span className="truncate">Users ({usersList.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToPage('codes')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'codes'
+                  ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white border-purple-300/40 shadow-md ring-1 ring-purple-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5 shrink-0 text-[#FFC107]" />
+              <span className="truncate">Codes ({codes.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToPage('announcements')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'announcements'
+                  ? 'bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white border-purple-300/40 shadow-md ring-1 ring-purple-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5 shrink-0 text-purple-300" />
+              <span className="truncate">Broadcast</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigateToPage('gateway')}
+              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 truncate border ${
+                currentPage === 'gateway'
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white border-cyan-300/40 shadow-md ring-1 ring-cyan-400/50'
+                  : 'mirror-glass hover:bg-white/10 text-purple-200/80 border-purple-500/20'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+              <span className="truncate">Gateway</span>
+            </button>
+          </div>
+
+          {/* Filter Status Selector for Deposits / Withdrawals */}
+          {(currentPage === 'deposits' || currentPage === 'withdrawals') && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <span className="text-xs text-purple-200 font-semibold">
+                Filter by Status:
+              </span>
+
+              <div className="flex items-center gap-1 bg-[#121922] p-1 rounded-xl border border-white/10 text-xs">
+                <button
+                  onClick={() => setFilterStatus('all')}
+                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'all' ? 'bg-white/15 text-white font-bold' : 'text-slate-400'}`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setFilterStatus('pending')}
+                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'pending' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-400'}`}
+                >
+                  Pending
+                </button>
+                <button
+                  onClick={() => setFilterStatus('approved')}
+                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'text-slate-400'}`}
+                >
+                  Approved
+                </button>
+                <button
+                  onClick={() => setFilterStatus('rejected')}
+                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'rejected' ? 'bg-red-500/20 text-red-300 font-bold' : 'text-slate-400'}`}
+                >
+                  Rejected
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PAGE 1: Deposit Approvals (Receipt Review) */}
+      {currentPage === 'deposits' && (
+        <div className="space-y-3">
+          {/* Mobile Card View (Adapt to screen size without clipping/overlap) */}
+          <div className="block md:hidden space-y-3">
             {filteredDeposits.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-xs">
+              <div className="mirror-glass-card rounded-2xl p-6 text-center text-slate-400 text-xs">
                 No deposit requests found for status: <strong>{filterStatus}</strong>.
               </div>
             ) : (
               filteredDeposits.map((dep) => (
-                <div key={dep.id} className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 hover:bg-white/5 transition-colors">
-                  <div className="space-y-1.5 flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm sm:text-base text-white">{dep.userName}</span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                        dep.status === 'approved'
-                          ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
-                          : dep.status === 'rejected'
-                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                          : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
-                      }`}>
-                        {dep.status}
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span>Email: <strong className="text-white font-mono">{dep.userEmail}</strong></span>
-                      <span>•</span>
-                      <span>Ref: <strong className="text-[#FFC107] font-mono">{dep.paymentReference || dep.id}</strong></span>
-                      <span>•</span>
-                      <span>Date: <span className="text-slate-400">{new Date(Number(dep.createdAt)).toLocaleString()}</span></span>
-                    </div>
-
-                    {/* Receipt Image Thumbnail & Button */}
-                    {dep.receiptImage && (
-                      <div className="pt-2 flex items-center gap-3">
-                        <div
-                          onClick={() => setPreviewImage(dep.receiptImage)}
-                          className="w-12 h-12 rounded-xl overflow-hidden border border-purple-500/40 bg-black cursor-pointer hover:opacity-80 transition-opacity shadow-sm relative group shrink-0"
-                          title="Click to inspect full receipt image"
-                        >
-                          <img src={dep.receiptImage} alt="Deposit Receipt Thumbnail" className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <Eye className="w-4 h-4" />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewImage(dep.receiptImage)}
-                            className="inline-flex items-center gap-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-3 py-1.5 rounded-xl border border-purple-500/30 transition-all font-semibold shadow-inner"
-                          >
-                            <Eye className="w-4 h-4 text-[#FFC107]" />
-                            <span>Inspect Receipt Image</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setSelectedReceiptData({
-                              type: 'deposit',
-                              title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
-                              amount: dep.amount,
-                              status: dep.status,
-                              reference: dep.paymentReference || dep.id,
-                              userEmail: dep.userEmail,
-                              userName: dep.userName,
-                              receiptImage: dep.receiptImage,
-                              adminNote: dep.adminNote,
-                              date: new Date(Number(dep.createdAt)).toLocaleString()
-                            })}
-                            className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white px-3 py-1.5 rounded-xl border border-white/20 transition-all font-semibold"
-                          >
-                            <span>View Full Receipt</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                <div key={dep.id} className="mirror-glass-card rounded-2xl p-4 border border-white/10 space-y-3 shadow-md">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-white truncate">{dep.userName}</span>
+                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                      dep.status === 'approved'
+                        ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                        : dep.status === 'rejected'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                    }`}>
+                      {dep.status}
+                    </span>
                   </div>
 
-                  <div className="flex items-center justify-end gap-4 shrink-0">
-                    <div className="text-right">
-                      <div className="text-lg font-black text-[#00B875] font-mono">
-                        ₦{dep.amount.toLocaleString()}
-                      </div>
-                      <span className="text-[10px] text-slate-400">Deposited Amount</span>
+                  <div className="text-xs text-slate-300 space-y-1 font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Email:</span>
+                      <span className="text-white truncate max-w-[200px]">{dep.userEmail}</span>
                     </div>
-
-                    {dep.status === 'pending' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setActionPrompt({
-                              isOpen: true,
-                              type: 'approve_deposit',
-                              id: dep.id,
-                              userName: dep.userName,
-                              userEmail: dep.userEmail,
-                              amount: dep.amount,
-                              reference: dep.paymentReference,
-                              customMessage: `Deposit of ₦${dep.amount.toLocaleString()} approved and credited to your Deposited Balance.`,
-                              isWarning: false
-                            });
-                          }}
-                          className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Approve &amp; Credit</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActionPrompt({
-                              isOpen: true,
-                              type: 'reject_deposit',
-                              id: dep.id,
-                              userName: dep.userName,
-                              userEmail: dep.userEmail,
-                              amount: dep.amount,
-                              reference: dep.paymentReference,
-                              customMessage: 'Transaction receipt unverified. Please upload clear proof of payment.',
-                              isWarning: true
-                            });
-                          }}
-                          className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Reject</span>
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Ref:</span>
+                      <span className="text-[#FFC107] truncate max-w-[200px]">{dep.paymentReference || dep.id}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Date:</span>
+                      <span>{new Date(Number(dep.createdAt)).toLocaleString()}</span>
+                    </div>
                   </div>
+
+                  <div className="p-3 rounded-xl bg-black/40 border border-emerald-500/20 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Deposited Amount:</span>
+                    <span className="text-lg font-black text-[#00B875] font-mono">
+                      ₦{dep.amount.toLocaleString()}
+                    </span>
+                  </div>
+
+                  {dep.receiptImage && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(dep.receiptImage)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#FFC107]" />
+                        <span>Inspect Receipt</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReceiptData({
+                          type: 'deposit',
+                          title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
+                          amount: dep.amount,
+                          status: dep.status,
+                          reference: dep.paymentReference || dep.id,
+                          userEmail: dep.userEmail,
+                          userName: dep.userName,
+                          receiptImage: dep.receiptImage,
+                          adminNote: dep.adminNote,
+                          date: new Date(Number(dep.createdAt)).toLocaleString()
+                        })}
+                        className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/20 text-xs font-semibold"
+                      >
+                        Full Details
+                      </button>
+                    </div>
+                  )}
+
+                  {dep.status === 'pending' && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'approve_deposit',
+                            id: dep.id,
+                            userName: dep.userName,
+                            userEmail: dep.userEmail,
+                            amount: dep.amount,
+                            reference: dep.paymentReference,
+                            customMessage: `Deposit of ₦${dep.amount.toLocaleString()} approved and credited to your Deposited Balance.`,
+                            isWarning: false
+                          });
+                        }}
+                        className="py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve &amp; Credit</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'reject_deposit',
+                            id: dep.id,
+                            userName: dep.userName,
+                            userEmail: dep.userEmail,
+                            amount: dep.amount,
+                            reference: dep.paymentReference,
+                            customMessage: 'Transaction receipt unverified. Please upload clear proof of payment.',
+                            isWarning: true
+                          });
+                        }}
+                        className="py-2.5 rounded-xl bg-red-600/25 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+            <div className="min-w-[950px] divide-y divide-white/5">
+              {filteredDeposits.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  No deposit requests found for status: <strong>{filterStatus}</strong>.
+                </div>
+              ) : (
+                filteredDeposits.map((dep) => (
+                  <div key={dep.id} className="p-4 sm:p-5 flex flex-row items-center justify-between gap-4 hover:bg-white/5 transition-colors">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm sm:text-base text-white">{dep.userName}</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                          dep.status === 'approved'
+                            ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                            : dep.status === 'rejected'
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                            : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                        }`}>
+                          {dep.status}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-slate-300 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>Email: <strong className="text-white font-mono">{dep.userEmail}</strong></span>
+                        <span>•</span>
+                        <span>Ref: <strong className="text-[#FFC107] font-mono">{dep.paymentReference || dep.id}</strong></span>
+                        <span>•</span>
+                        <span>Date: <span className="text-slate-400">{new Date(Number(dep.createdAt)).toLocaleString()}</span></span>
+                      </div>
+
+                      {/* Receipt Image Thumbnail & Button */}
+                      {dep.receiptImage && (
+                        <div className="pt-2 flex items-center gap-3">
+                          <div
+                            onClick={() => setPreviewImage(dep.receiptImage)}
+                            className="w-12 h-12 rounded-xl overflow-hidden border border-purple-500/40 bg-black cursor-pointer hover:opacity-80 transition-opacity shadow-sm relative group shrink-0"
+                            title="Click to inspect full receipt image"
+                          >
+                            <img src={dep.receiptImage} alt="Deposit Receipt Thumbnail" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <Eye className="w-4 h-4" />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(dep.receiptImage)}
+                              className="inline-flex items-center gap-1.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 px-3 py-1.5 rounded-xl border border-purple-500/30 transition-all font-semibold shadow-inner"
+                            >
+                              <Eye className="w-4 h-4 text-[#FFC107]" />
+                              <span>Inspect Receipt Image</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReceiptData({
+                                type: 'deposit',
+                                title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
+                                amount: dep.amount,
+                                status: dep.status,
+                                reference: dep.paymentReference || dep.id,
+                                userEmail: dep.userEmail,
+                                userName: dep.userName,
+                                receiptImage: dep.receiptImage,
+                                adminNote: dep.adminNote,
+                                date: new Date(Number(dep.createdAt)).toLocaleString()
+                              })}
+                              className="inline-flex items-center gap-1.5 text-xs bg-white/10 hover:bg-white/15 text-white px-3 py-1.5 rounded-xl border border-white/20 transition-all font-semibold"
+                            >
+                              <span>View Full Receipt</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-4 shrink-0">
+                      <div className="text-right">
+                        <div className="text-lg font-black text-[#00B875] font-mono">
+                          ₦{dep.amount.toLocaleString()}
+                        </div>
+                        <span className="text-[10px] text-slate-400">Deposited Amount</span>
+                      </div>
+
+                      {dep.status === 'pending' && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setActionPrompt({
+                                isOpen: true,
+                                type: 'approve_deposit',
+                                id: dep.id,
+                                userName: dep.userName,
+                                userEmail: dep.userEmail,
+                                amount: dep.amount,
+                                reference: dep.paymentReference,
+                                customMessage: `Deposit of ₦${dep.amount.toLocaleString()} approved and credited to your Deposited Balance.`,
+                                isWarning: false
+                              });
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Approve &amp; Credit</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActionPrompt({
+                                isOpen: true,
+                                type: 'reject_deposit',
+                                id: dep.id,
+                                userName: dep.userName,
+                                userEmail: dep.userEmail,
+                                amount: dep.amount,
+                                reference: dep.paymentReference,
+                                customMessage: 'Transaction receipt unverified. Please upload clear proof of payment.',
+                                isWarning: true
+                              });
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center gap-1 active:scale-95 whitespace-nowrap"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Reject</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TAB 1: Withdrawal Approvals */}
-      {tab === 'withdrawals' && (
+      {/* PAGE 2: Withdrawal Approvals */}
+      {currentPage === 'withdrawals' && (
         <div className="space-y-3">
           {/* Action Response Alert Banner */}
           {withdrawalAlert && (
@@ -927,7 +1384,231 @@ export const AdminPanel: React.FC = () => {
             </div>
           )}
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+          {/* Mobile Card View (Adapt to screen size without clipping/overlap) */}
+          <div className="block md:hidden space-y-3">
+            {filteredWithdrawals.length === 0 ? (
+              <div className="mirror-glass-card rounded-2xl p-6 text-center text-slate-400 text-xs">
+                No withdrawal requests found for this filter.
+              </div>
+            ) : (
+              filteredWithdrawals.map((req) => {
+                const isApproving = approvingWithdrawalId === req.id;
+                const isSuccessful = req.status === 'successful' || req.status === 'approved';
+                const isFailed = req.status === 'failed';
+                const isRejected = req.status === 'rejected';
+
+                return (
+                  <div key={req.id} className="mirror-glass-card rounded-2xl p-4 border border-white/10 space-y-3 shadow-md">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-white truncate">{req.userName}</span>
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        isSuccessful
+                          ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                          : isFailed || isRejected
+                          ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                          : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                      }`}>
+                        {isSuccessful ? 'SUCCESS (DISBURSED)' : isFailed ? 'FAILED' : req.status}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-300 space-y-1 font-mono">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Email:</span>
+                        <span className="text-white truncate max-w-[200px]">{req.userEmail}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">PalmPay Acc:</span>
+                        <span className="inline-flex items-center gap-1 font-bold text-[#FFC107]">
+                          <span>{req.accountNumber}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAccount(req.accountNumber)}
+                            className="p-1 rounded bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+                            title="Copy Account Number"
+                          >
+                            {copiedAcc === req.accountNumber ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Bank:</span>
+                        <span className="text-white truncate">{req.bankName || 'PalmPay Wallet'}</span>
+                      </div>
+                      {req.cashbackCode && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Code:</span>
+                          <span className="text-[#FFC107] font-bold">{req.cashbackCode}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-black/40 border border-amber-500/20 flex items-center justify-between">
+                      <span className="text-xs text-slate-400">Withdrawal Amount:</span>
+                      <span className="text-lg font-black text-[#FFC107] font-mono">
+                        ₦{req.amount.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {req.adminNote && (
+                      <p className="text-[11px] text-rose-300 bg-rose-950/30 px-2.5 py-1 rounded-lg border border-rose-500/25">
+                        ⚠️ {req.adminNote}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReceiptData({
+                          type: 'withdrawal',
+                          title: `PalmPay Account Withdrawal (${req.bankName || 'PalmPay Wallet'})`,
+                          amount: req.amount,
+                          status: req.status,
+                          reference: req.reference || req.id,
+                          userEmail: req.userEmail,
+                          userName: req.userName,
+                          bankName: req.bankName,
+                          accountNumber: req.accountNumber,
+                          code: req.cashbackCode,
+                          adminNote: req.adminNote,
+                          receiptImage: req.receiptImage || undefined,
+                          date: new Date(Number(req.createdAt || Date.now())).toLocaleString()
+                        })}
+                        className="flex-1 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/20 text-xs font-semibold flex items-center justify-center gap-1.5"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
+                        <span>View Details</span>
+                      </button>
+
+                      {req.receiptImage && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImage(req.receiptImage || null)}
+                          className="py-2 px-3 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 text-xs font-semibold flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-[#FFC107]" />
+                          <span>Proof</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {req.status === 'pending' && (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          disabled={isApproving}
+                          onClick={() => {
+                            setActionPrompt({
+                              isOpen: true,
+                              type: 'approve_withdrawal',
+                              id: req.id,
+                              userName: req.userName,
+                              userEmail: req.userEmail,
+                              amount: req.amount,
+                              accountNumber: req.accountNumber,
+                              bankName: req.bankName,
+                              reference: req.reference || req.id,
+                              code: req.cashbackCode,
+                              customMessage: `Disbursed ₦${req.amount.toLocaleString()} to PalmPay account ${req.accountNumber} on Site B with zero error.`,
+                              isWarning: false
+                            });
+                          }}
+                          className="py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-[#00B875] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                        >
+                          {isApproving ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Calling API...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          disabled={isApproving}
+                          onClick={() => {
+                            setActionPrompt({
+                              isOpen: true,
+                              type: 'reject_withdrawal',
+                              id: req.id,
+                              userName: req.userName,
+                              userEmail: req.userEmail,
+                              amount: req.amount,
+                              accountNumber: req.accountNumber,
+                              bankName: req.bankName,
+                              reference: req.reference || req.id,
+                              code: req.cashbackCode,
+                              customMessage: 'Declined by Admin: Account verification mismatch. Funds have been reversed back to your balance.',
+                              isWarning: true
+                            });
+                          }}
+                          className="py-2.5 rounded-xl bg-red-600/25 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>Decline</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {(req.status === 'successful' || req.status === 'approved') && (
+                      <button
+                        disabled={isApproving}
+                        onClick={() => {
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'approve_withdrawal',
+                            id: req.id,
+                            userName: req.userName,
+                            userEmail: req.userEmail,
+                            amount: req.amount,
+                            accountNumber: req.accountNumber,
+                            bankName: req.bankName,
+                            reference: req.reference || req.id,
+                            customMessage: `Re-sent ₦${req.amount.toLocaleString()} disbursal to PalmPay account ${req.accountNumber} with zero error.`,
+                            isWarning: false
+                          });
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-purple-600/25 hover:bg-purple-600 text-purple-200 hover:text-white font-bold text-xs border border-purple-500/40 transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-purple-300" />
+                        <span>Force Re-send Disbursal to PalmPay</span>
+                      </button>
+                    )}
+
+                    {req.status === 'failed' && (
+                      <button
+                        disabled={isApproving}
+                        onClick={() => {
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'approve_withdrawal',
+                            id: req.id,
+                            userName: req.userName,
+                            userEmail: req.userEmail,
+                            amount: req.amount,
+                            accountNumber: req.accountNumber,
+                            bankName: req.bankName,
+                            reference: req.reference || req.id,
+                            customMessage: `Retried ₦${req.amount.toLocaleString()} disbursal to PalmPay account ${req.accountNumber}.`,
+                            isWarning: false
+                          });
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-amber-600/30 hover:bg-amber-600 text-amber-200 hover:text-white font-bold text-xs border border-amber-500/40 transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retry Disbursal</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
             <div className="min-w-[1100px] divide-y divide-white/5">
               {filteredWithdrawals.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
@@ -1186,15 +1867,139 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: CashBack Code Orders */}
-      {tab === 'codes' && (
+      {/* PAGE 3: CashBack Code Orders */}
+      {currentPage === 'codes' && (
         <div className="space-y-4">
-          <h3 className="text-sm sm:text-base font-bold text-white flex items-center justify-between">
-            <span>CashBack Code Orders (₦8,550 fee)</span>
-            <span className="text-xs text-[#FFC107] font-mono font-normal">Pending Orders: {codes.filter(c => c.status === 'pending').length}</span>
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-[#FFC107]" />
+              <span>CashBack Code Orders (₦8,550 fee)</span>
+            </h3>
+            <span className="text-xs text-[#FFC107] font-mono font-normal">
+              Pending Orders: {codes.filter(c => c.status === 'pending').length}
+            </span>
+          </div>
 
-          <div className="mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
+          {/* Mobile Card View for Codes (No horizontal scroll clipping on phones) */}
+          <div className="block md:hidden space-y-3">
+            {codes.length === 0 ? (
+              <div className="mirror-glass-card rounded-2xl p-6 text-center text-slate-400 text-xs">
+                No code purchases recorded.
+              </div>
+            ) : (
+              codes.map((c) => (
+                <div key={c.id} className="mirror-glass-card rounded-2xl p-4 border border-white/10 space-y-3 shadow-md">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold text-sm text-[#FFC107]">{c.generatedCode}</span>
+                    <span className={`text-[10px] font-black uppercase border px-2 py-0.5 rounded-full ${
+                      c.status === 'approved'
+                        ? 'bg-emerald-500/20 text-[#00B875] border-emerald-500/40'
+                        : c.status === 'rejected'
+                        ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                        : 'bg-amber-500/20 text-[#FFC107] border-amber-500/40 animate-pulse'
+                    }`}>
+                      {c.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-300 space-y-1 font-mono">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Buyer:</span>
+                      <span className="text-white truncate max-w-[200px]">{c.userEmail}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Payment:</span>
+                      <span className="text-purple-300">
+                        {c.paymentSource === 'deposit_balance' ? 'Deposit Balance' : 'Paystack Link'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Ref:</span>
+                      <span className="text-slate-200 truncate max-w-[180px]">{c.paymentReference || 'PAYSTACK'}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-black/40 border border-yellow-500/20 flex items-center justify-between">
+                    <span className="text-xs text-slate-400">Code Price:</span>
+                    <span className="text-base font-bold text-[#FFC107] font-mono">
+                      ₦{(c.codePrice || 8550).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedReceiptData({
+                      type: 'code',
+                      title: `CashBack Code Purchase (${c.generatedCode})`,
+                      amount: c.codePrice || 8550,
+                      status: c.status,
+                      reference: c.paymentReference || 'PAYSTACK',
+                      userEmail: c.userEmail,
+                      code: c.generatedCode,
+                      receiptImage: c.receiptImage,
+                      adminNote: c.adminNote,
+                      date: new Date(Number(c.createdAt || Date.now())).toLocaleString()
+                    })}
+                    className="w-full py-2 px-3 rounded-xl mirror-glass hover:bg-white/10 text-purple-200 text-xs font-semibold border border-purple-500/30 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-[#FFC107]" />
+                    <span>View Receipt &amp; Proof</span>
+                  </button>
+
+                  {c.status === 'pending' && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          const codeToAssign = (!c.generatedCode || c.generatedCode.toLowerCase().includes('pending') || !c.generatedCode.startsWith('palm_'))
+                            ? generateUniqueCashbackCode(c.userEmail || c.uid)
+                            : c.generatedCode;
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'approve_code',
+                            id: c.id,
+                            userName: c.userEmail.split('@')[0],
+                            userEmail: c.userEmail,
+                            amount: c.codePrice || 8550,
+                            code: codeToAssign,
+                            reference: c.paymentReference,
+                            customMessage: `CashBack Code (${codeToAssign}) approved and activated. Your code is now active for withdrawals.`,
+                            isWarning: false
+                          });
+                        }}
+                        className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActionPrompt({
+                            isOpen: true,
+                            type: 'reject_code',
+                            id: c.id,
+                            userName: c.userEmail.split('@')[0],
+                            userEmail: c.userEmail,
+                            amount: c.codePrice || 8550,
+                            reference: c.paymentReference,
+                            customMessage: 'Payment unverified. CashBack Code order declined.',
+                            isWarning: true
+                          });
+                        }}
+                        className="py-2.5 rounded-xl bg-red-600/25 hover:bg-red-600 text-red-200 hover:text-white font-bold text-xs border border-red-500/40 transition-all flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        <span>Decline</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table View for Codes */}
+          <div className="hidden md:block mirror-glass-card rounded-2xl border border-white/10 overflow-auto max-h-[650px] max-w-full scrollbar-thin">
             <div className="min-w-[950px] divide-y divide-white/5">
               {codes.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
@@ -1312,8 +2117,8 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: User Balance Override Management Hub */}
-      {tab === 'balance' && (
+      {/* PAGE 4: User Balance Override Management Hub */}
+      {currentPage === 'users' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Left Column: Registered Users Directory & Quick Search */}
@@ -1759,8 +2564,8 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: Banner Broadcaster */}
-      {tab === 'announcements' && (
+      {/* PAGE 5: Banner Broadcaster */}
+      {currentPage === 'announcements' && (
         <div className="mirror-glass-card rounded-2xl p-6 border border-white/10 space-y-4 max-w-xl">
           <div className="flex items-center gap-2 pb-2 border-b border-white/10">
             <Bell className="w-5 h-5 text-[#FFC107]" />
@@ -1797,8 +2602,8 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 5: PalmPay API Gateway Hub */}
-      {tab === 'gateway' && (
+      {/* PAGE 6: PalmPay API Gateway Hub */}
+      {currentPage === 'gateway' && (
         <div className="space-y-6 max-w-4xl">
           {/* Header Banner */}
           <div className="mirror-glass-card rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-cyan-500/30 shadow-2xl relative overflow-hidden space-y-4">

@@ -12,6 +12,15 @@ export type NavigationPage =
   | 'community' 
   | 'support';
 
+export type AdminSubPage = 
+  | 'overview' 
+  | 'withdrawals' 
+  | 'deposits' 
+  | 'users' 
+  | 'codes' 
+  | 'announcements' 
+  | 'gateway';
+
 export interface UserProfile {
   uid: string;
   email: string;

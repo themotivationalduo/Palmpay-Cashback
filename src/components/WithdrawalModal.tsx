@@ -37,6 +37,7 @@ interface WithdrawalModalProps {
 export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
   isOpen,
   onClose,
+  onOpenBuyCode,
   isStandalone = false
 }) => {
   const { user, requestWithdrawal } = useAuth();

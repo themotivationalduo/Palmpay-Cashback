@@ -39,7 +39,6 @@ interface AuthContextType {
   loginAsAdminDirect: () => Promise<void>;
   logout: () => Promise<void>;
   purgeAllRecords: () => Promise<void>;
-  deleteUserPermanently: (targetUidOrEmail: string) => Promise<{ success: boolean; message: string }>;
   
   // Balances
   updateBalance: (
