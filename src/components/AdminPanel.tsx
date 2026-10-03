@@ -31,7 +31,7 @@ import {
   MessageSquare,
   Send
 } from 'lucide-react';
-import { useAuth, getLocalWithdrawalRequests, generateRandomCashbackCode } from '../context/AuthContext';
+import { useAuth, getLocalWithdrawalRequests, generateRandomCashbackCode, generateUniqueCashbackCode } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { db, collection, query, onSnapshot, updateDoc, doc, addDoc, getDocs } from '../lib/firebase';
 import { WithdrawalRequest, CodeOrder, DepositRequest, UserProfile } from '../types';
@@ -1182,7 +1182,7 @@ export const AdminPanel: React.FC = () => {
                           <button
                             onClick={() => {
                               const codeToAssign = (!c.generatedCode || c.generatedCode.toLowerCase().includes('pending') || !c.generatedCode.startsWith('palm_'))
-                                ? generateRandomCashbackCode()
+                                ? generateUniqueCashbackCode(c.userEmail || c.uid)
                                 : c.generatedCode;
                               setActionPrompt({
                                 isOpen: true,

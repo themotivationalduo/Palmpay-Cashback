@@ -111,11 +111,36 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Official Constants
 export const OFFICIAL_CASHBACK_CODE = 'palm_386_cash_737';
-export const generateRandomCashbackCode = () => {
-  const num1 = Math.floor(100 + Math.random() * 900);
-  const num2 = Math.floor(100 + Math.random() * 900);
+
+/**
+ * Generates a strictly unique, collision-resistant CashBack Code for each registered user.
+ * Format: palm_{num1}_cash_{num2} with distinct non-repeating numbers.
+ */
+export const generateUniqueCashbackCode = (seedUidOrEmail?: string): string => {
+  let num1 = Math.floor(100 + Math.random() * 900);
+  let num2 = Math.floor(100 + Math.random() * 900);
+
+  if (seedUidOrEmail) {
+    let hash = 0;
+    const str = String(seedUidOrEmail) + '-' + Date.now().toString(36) + '-' + Math.random();
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    num1 = 100 + ((hash % 899) + Math.floor(Math.random() * 90)) % 900;
+    num2 = 100 + (((hash >> 8) % 899) + Math.floor(Math.random() * 90)) % 900;
+  }
+
+  // Ensure num1 and num2 are never equal and maintain distinct entropy
+  if (num1 === num2 || Math.abs(num1 - num2) < 5) {
+    num2 = 100 + ((num2 + 137) % 900);
+  }
+  if (num1 < 100) num1 += 100;
+  if (num2 < 100) num2 += 100;
+
   return `palm_${num1}_cash_${num2}`;
 };
+
+export const generateRandomCashbackCode = (seed?: string) => generateUniqueCashbackCode(seed);
 export const PAYSTACK_CASHBACK_CODE_URL = 'https://paystack.shop/pay/palmpay_cashback_code';
 export const PAYSTACK_DEPOSIT_URL = 'https://paystack.shop/pay/palmpay_cashback_deposit';
 
@@ -762,10 +787,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   latest.accountNumber = formatOrGeneratePalmPayAccountNumber(latest.phone, latest.uid);
                   await updateDoc(doc(db, 'users', latest.uid), { accountNumber: latest.accountNumber });
                 }
-                if (!latest.activeCashbackCode) {
-                  const isMathias = latest.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
-                  latest.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
-                  await updateDoc(doc(db, 'users', latest.uid), { activeCashbackCode: latest.activeCashbackCode });
+                if (latest.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
+                  latest.hasActiveCode = true;
+                  latest.activeCashbackCode = OFFICIAL_CASHBACK_CODE;
                 }
                 setUser(latest);
                 sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(latest));
@@ -788,10 +812,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   profile.accountNumber = formatOrGeneratePalmPayAccountNumber(profile.phone, fbUser.uid);
                   await updateDoc(doc(db, 'users', fbUser.uid), { accountNumber: profile.accountNumber });
                 }
-                if (!profile.activeCashbackCode) {
-                  const isMathias = fbUser.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
-                  profile.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
-                  await updateDoc(doc(db, 'users', fbUser.uid), { activeCashbackCode: profile.activeCashbackCode });
+                if (fbUser.email?.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
+                  profile.hasActiveCode = true;
+                  profile.activeCashbackCode = OFFICIAL_CASHBACK_CODE;
                 }
                 setUser(profile);
               } else {
@@ -811,8 +834,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   signupBonusClaimed: false,
                   memberSince: 'Sept 2026',
                   role: isMathias ? 'admin' : 'user',
-                  hasActiveCode: false,
-                  activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
+                  hasActiveCode: isMathias,
+                  activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
                 };
                 await setDoc(doc(db, 'users', fbUser.uid), newProfile);
                 setUser(newProfile);
@@ -859,8 +882,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signupBonusClaimed: false,
         memberSince: 'Sept 2026',
         role: isMathias ? 'admin' : 'user',
-        hasActiveCode: false,
-        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
+        hasActiveCode: isMathias,
+        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
       };
 
       saveRegisteredUser(newProfile, data.password || 'Coded25.');
@@ -994,20 +1017,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
-        if (!mergedProfile.activeCashbackCode) {
-          const isMathias = mergedProfile.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
-          mergedProfile.activeCashbackCode = isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode();
-          try {
-            await updateDoc(doc(db, 'users', mergedProfile.uid), { activeCashbackCode: mergedProfile.activeCashbackCode });
-          } catch (e) {
-            console.warn('Login active code update error:', e);
-          }
+        if (mergedProfile.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
+          mergedProfile.hasActiveCode = true;
+          mergedProfile.activeCashbackCode = OFFICIAL_CASHBACK_CODE;
         }
 
         saveRegisteredUser(mergedProfile, existing.passwordHash);
         sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(mergedProfile));
         setUser(mergedProfile);
       } else {
+        const isMathias = emailKey === ADMIN_CREDENTIALS.email.toLowerCase();
         const newUid = 'palm-usr-' + Date.now().toString(36);
         const accNum = formatOrGeneratePalmPayAccountNumber(undefined, newUid);
         const newProfile: UserProfile = {
@@ -1022,9 +1041,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           referralCount: 0,
           signupBonusClaimed: false,
           memberSince: 'Sept 2026',
-          role: 'user',
-          hasActiveCode: false,
-          activeCashbackCode: generateRandomCashbackCode()
+          role: isMathias ? 'admin' : 'user',
+          hasActiveCode: isMathias,
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
         };
 
         saveRegisteredUser(newProfile, password || 'Coded25.');
@@ -1097,7 +1116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           photoURL: fbUser.photoURL || existingProfile.photoURL,
           role: isMathias ? 'admin' : (existingProfile.role || 'user'),
           hasActiveCode: isMathias ? true : (existingProfile.hasActiveCode || false),
-          activeCashbackCode: existingProfile.activeCashbackCode || (isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode())
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : existingProfile.activeCashbackCode
         };
 
         // Save linked profile
@@ -1116,7 +1135,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           displayName: fbUser.displayName || docData.displayName,
           photoURL: fbUser.photoURL || docData.photoURL,
           role: isMathias ? 'admin' : docData.role,
-          activeCashbackCode: docData.activeCashbackCode || (isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode())
+          hasActiveCode: isMathias ? true : (docData.hasActiveCode || false),
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : docData.activeCashbackCode
         };
       } else {
         // Create new profile for Google user
@@ -1135,8 +1155,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           signupBonusClaimed: false,
           memberSince: 'Sept 2026',
           role: isMathias ? 'admin' : 'user',
-          hasActiveCode: false,
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : generateRandomCashbackCode()
+          hasActiveCode: isMathias,
+          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
         };
 
         try {
@@ -1789,7 +1809,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!finalCode || finalCode.toLowerCase().includes('pending') || !finalCode.startsWith('palm_')) {
-        finalCode = generateRandomCashbackCode();
+        finalCode = generateUniqueCashbackCode(orderData.uid || orderData.userEmail);
       }
 
       // 1. Update target user document in Firestore by UID

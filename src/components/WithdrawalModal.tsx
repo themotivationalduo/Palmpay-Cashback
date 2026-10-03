@@ -836,26 +836,34 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
                     <KeyRound className="w-3.5 h-3.5 text-[#FFC107]" />
                     CashBack Code <span className="text-red-400">*</span>
                   </label>
-                  {user?.activeCashbackCode && !user.activeCashbackCode.includes('pending') ? (
+                  {user?.hasActiveCode && user?.activeCashbackCode && !user.activeCashbackCode.includes('pending') ? (
                     <button
                       type="button"
                       onClick={() => {
                         setEnteredCode(user.activeCashbackCode!);
                         handleCodeChange(user.activeCashbackCode!);
                       }}
-                      className="text-[10px] text-[#00B875] hover:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono font-bold"
+                      className="text-[10px] text-[#00B875] hover:text-emerald-300 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-mono font-bold"
                     >
-                      Use My Code: {user.activeCashbackCode}
+                      Use My Purchased Code: {user.activeCashbackCode}
+                    </button>
+                  ) : onOpenBuyCode ? (
+                    <button
+                      type="button"
+                      onClick={onOpenBuyCode}
+                      className="text-[10px] text-amber-300 hover:text-amber-200 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold flex items-center gap-1"
+                    >
+                      <span>🔒 Code Required — Purchase (₦8,550)</span>
                     </button>
                   ) : (
-                    <span className="text-[10px] text-amber-300/80 font-medium">Manual Entry Required</span>
+                    <span className="text-[10px] text-amber-300/80 font-medium">🔒 Purchase Required</span>
                   )}
                 </div>
                 <input
                   type="text"
                   value={enteredCode}
                   onChange={(e) => handleCodeChange(e.target.value)}
-                  placeholder="Type your purchased CashBack Code (palm_###_cash_###)"
+                  placeholder={user?.hasActiveCode ? "Enter your purchased CashBack Code (palm_###_cash_###)" : "Purchase CashBack Code to unlock (palm_###_cash_###)"}
                   className={`w-full bg-[#121922] text-white text-sm sm:text-base font-mono font-bold tracking-wider rounded-xl px-3.5 py-3 border focus:outline-none text-center transition-colors ${
                     isValidatingCode ? 'border-amber-500/60 focus:border-amber-400' :
                     codeValidationResult.isValid ? 'border-emerald-500/60 focus:border-emerald-400' :
