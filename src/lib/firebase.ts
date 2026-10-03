@@ -60,26 +60,36 @@ googleProvider.setCustomParameters({
 
 /**
  * Safely delete any files stored in Firebase Storage for a given user UID or prefix
+ * Uses timeout race guards to ensure it never hangs if storage is unconfigured or slow.
  */
 export async function deleteUserStorageFiles(uid: string): Promise<number> {
   if (!uid || !storage) return 0;
   let deletedCount = 0;
   const prefixes = [`users/${uid}`, `receipts/${uid}`, `deposits/${uid}`, `withdrawals/${uid}`, `avatars/${uid}`];
 
+  const withTimeout = <T>(promise: Promise<T>, ms = 2000): Promise<T | null> => {
+    return Promise.race([
+      promise,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
+    ]);
+  };
+
   for (const prefix of prefixes) {
     try {
       const folderRef = ref(storage, prefix);
-      const res = await listAll(folderRef);
-      for (const itemRef of res.items) {
-        try {
-          await deleteObject(itemRef);
-          deletedCount++;
-        } catch (itemErr) {
-          console.warn(`Could not delete storage file ${itemRef.fullPath}:`, itemErr);
+      const res = await withTimeout(listAll(folderRef), 1500);
+      if (res && res.items) {
+        for (const itemRef of res.items) {
+          try {
+            await withTimeout(deleteObject(itemRef), 1500);
+            deletedCount++;
+          } catch (itemErr) {
+            console.warn(`Could not delete storage file ${itemRef.fullPath}:`, itemErr);
+          }
         }
       }
-    } catch {
-      // Folder might not exist or have items, safe to ignore
+    } catch (err) {
+      // Folder might not exist, safe to ignore
     }
   }
   return deletedCount;

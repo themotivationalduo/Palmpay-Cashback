@@ -137,7 +137,7 @@ export const AdminPanel: React.FC = () => {
   const [gatewaySaveMsg, setGatewaySaveMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [gatewayPingResult, setGatewayPingResult] = useState<any | null>(null);
   const [gatewayPinging, setGatewayPinging] = useState<boolean>(false);
-  const [testAccountNumber, setTestAccountNumber] = useState<string>('8012345678');
+  const [testAccountNumber, setTestAccountNumber] = useState<string>('');
   const [copiedAcc, setCopiedAcc] = useState<string | null>(null);
 
   const fetchGatewayConfig = async () => {

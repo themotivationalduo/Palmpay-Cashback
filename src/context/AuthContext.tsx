@@ -154,6 +154,13 @@ export const ADMIN_CREDENTIALS = {
 const REGISTERED_USERS_KEY = 'palmpay_accounts_registry_v3';
 const PURGE_TIMESTAMP_KEY = 'palmpay_db_purged_flag_v3';
 
+function withTimeout<T>(promise: Promise<T>, ms = 2500): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))
+  ]);
+}
+
 export const formatOrGeneratePalmPayAccountNumber = (phone?: string, uid?: string): string => {
   if (phone) {
     const digits = phone.replace(/\D/g, '');
@@ -254,35 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [depositRequests, setDepositRequests] = useState<DepositRequest[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
-  const [notifications, setNotifications] = useState<PlatformNotification[]>([
-    {
-      id: 'notif-1',
-      title: 'Welcome Bonus Credited',
-      message: '₦150,000 Sign-up Cashback has been added to your vault.',
-      timestamp: '10 mins ago',
-      unread: true,
-      type: 'bonus',
-      fullDetails: { type: 'bonus', amount: 150000, status: 'completed' }
-    },
-    {
-      id: 'notif-2',
-      title: "Game Win - Spin da' Bottle",
-      message: 'Congratulations! You won ₦5,500 on the jackpot slot.',
-      timestamp: '1 hour ago',
-      unread: true,
-      type: 'win',
-      fullDetails: { type: 'bonus', amount: 5500, status: 'won' }
-    },
-    {
-      id: 'notif-3',
-      title: 'Withdrawal Clearance Desk',
-      message: 'Purchase a CashBack Code to unlock immediate CBN-cleared disbursements.',
-      timestamp: '3 hours ago',
-      unread: false,
-      type: 'system',
-      fullDetails: { type: 'code', status: 'pending' }
-    }
-  ]);
+  const [notifications, setNotifications] = useState<PlatformNotification[]>([]);
   const [activeToast, setActiveToast] = useState<PlatformNotification | null>(null);
 
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -1220,6 +1199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const purgeAllRecords = async () => {
     setLoading(true);
+
     try {
       localStorage.removeItem(REGISTERED_USERS_KEY);
       localStorage.removeItem('palmpay_transactions');
@@ -1229,25 +1209,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.clear();
       localStorage.setItem(PURGE_TIMESTAMP_KEY, Date.now().toString());
 
-      // Purge non-admin user records from Firestore collections
+      // Purge non-admin user records from Firestore collections concurrently
       try {
         const collectionsToPurge = ['users', 'transactions', 'withdrawal_requests', 'code_orders', 'deposit_requests', 'referrals'];
-        for (const col of collectionsToPurge) {
-          const snap = await getDocs(collection(db, col));
-          for (const d of snap.docs) {
-            const data = d.data();
-            const email = String(data.email || data.userEmail || '').trim().toLowerCase();
-            if (email === ADMIN_CREDENTIALS.email.toLowerCase()) continue;
-            await deleteDoc(doc(db, col, d.id));
-          }
-        }
+        await Promise.allSettled(
+          collectionsToPurge.map(async (col) => {
+            try {
+              const snap = await withTimeout(getDocs(collection(db, col)), 2000);
+              if (!snap) return;
+              const delPromises: Promise<any>[] = [];
+              for (const d of snap.docs) {
+                const data = d.data();
+                const email = String(data.email || data.userEmail || '').trim().toLowerCase();
+                if (email === ADMIN_CREDENTIALS.email.toLowerCase()) continue;
+                delPromises.push(withTimeout(deleteDoc(doc(db, col, d.id)), 2000));
+              }
+              await Promise.allSettled(delPromises);
+            } catch (colErr) {
+              console.warn(`Firestore purge error on ${col}:`, colErr);
+            }
+          })
+        );
       } catch (fsErr) {
-        console.warn('Firestore purge error:', fsErr);
+        console.warn('Firestore purge overall error:', fsErr);
       }
 
-      // Trigger server-side purge endpoint
+      // Trigger server-side purge endpoint with timeout
       try {
-        await fetch('/api/admin/purge-all', { method: 'POST' });
+        await withTimeout(fetch('/api/admin/purge-all', { method: 'POST' }), 2000);
       } catch (apiErr) {
         console.warn('Server purge-all endpoint note:', apiErr);
       }
@@ -1301,94 +1290,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 2. Locate and delete from Firestore users collection
       try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        for (const docSnap of usersSnap.docs) {
-          const u = docSnap.data() as UserProfile;
-          const uUid = String(u.uid || docSnap.id).toLowerCase();
-          const uEmail = String(u.email || '').toLowerCase();
-          if (docSnap.id.toLowerCase() === queryTerm || uUid === queryTerm || uEmail === queryTerm) {
-            if (!targetProfile) targetProfile = { ...u, uid: u.uid || docSnap.id };
-            if (!targetUid) targetUid = docSnap.id;
-            // Delete user document from Firestore
-            await deleteDoc(doc(db, 'users', docSnap.id));
+        const usersSnap = await withTimeout(getDocs(collection(db, 'users')), 2000);
+        if (usersSnap) {
+          const userDelPromises: Promise<any>[] = [];
+          for (const docSnap of usersSnap.docs) {
+            const u = docSnap.data() as UserProfile;
+            const uUid = String(u.uid || docSnap.id).toLowerCase();
+            const uEmail = String(u.email || '').toLowerCase();
+            if (docSnap.id.toLowerCase() === queryTerm || uUid === queryTerm || uEmail === queryTerm) {
+              if (!targetProfile) targetProfile = { ...u, uid: u.uid || docSnap.id };
+              if (!targetUid) targetUid = docSnap.id;
+              userDelPromises.push(withTimeout(deleteDoc(doc(db, 'users', docSnap.id)), 2000));
+            }
           }
+          await Promise.allSettled(userDelPromises);
         }
       } catch (e) {
-        console.warn('Firestore user delete error:', e);
+        console.warn('Firestore user delete note:', e);
       }
 
       const finalUid = targetUid || targetProfile?.uid || queryTerm;
       const finalEmail = (targetProfile?.email || queryTerm).toLowerCase();
 
-      // 3. Delete user documents from associated Firestore collections
+      // 3. Concurrently delete related documents from other Firestore collections
+      const collectionsToCheck = [
+        { name: 'transactions', uidField: 'uid', emailField: 'email' },
+        { name: 'withdrawal_requests', uidField: 'uid', emailField: 'userEmail' },
+        { name: 'code_orders', uidField: 'uid', emailField: 'userEmail' },
+        { name: 'deposit_requests', uidField: 'uid', emailField: 'userEmail' },
+        { name: 'referrals', uidField: 'referrerUid', emailField: 'referrerEmail', extraUidField: 'referredUid', extraEmailField: 'referredEmail' }
+      ];
+
+      await Promise.allSettled(
+        collectionsToCheck.map(async (cfg) => {
+          try {
+            const snap = await withTimeout(getDocs(collection(db, cfg.name)), 2000);
+            if (!snap) return;
+            const delPromises: Promise<any>[] = [];
+            for (const d of snap.docs) {
+              const data = d.data();
+              const dUid = String(data[cfg.uidField] || '').trim();
+              const dEmail = String(data[cfg.emailField] || '').trim().toLowerCase();
+              const dExtraUid = cfg.extraUidField ? String(data[cfg.extraUidField] || '').trim() : '';
+              const dExtraEmail = cfg.extraEmailField ? String(data[cfg.extraEmailField] || '').trim().toLowerCase() : '';
+
+              const isMatch =
+                (finalUid && (dUid === finalUid || dExtraUid === finalUid)) ||
+                (finalEmail && (dEmail === finalEmail || dExtraEmail === finalEmail));
+
+              if (isMatch) {
+                delPromises.push(withTimeout(deleteDoc(doc(db, cfg.name, d.id)), 2000));
+              }
+            }
+            await Promise.allSettled(delPromises);
+          } catch (relErr) {
+            console.warn(`Deleting related Firestore records from ${cfg.name} note:`, relErr);
+          }
+        })
+      );
+
+      // 4. Delete user files from Firebase Storage with timeout
       try {
-        // Transactions
-        const txSnap = await getDocs(collection(db, 'transactions'));
-        for (const d of txSnap.docs) {
-          const t = d.data();
-          if (t.uid === finalUid || (t.email && t.email.toLowerCase() === finalEmail)) {
-            await deleteDoc(doc(db, 'transactions', d.id));
-          }
-        }
-
-        // Withdrawal Requests
-        const wdSnap = await getDocs(collection(db, 'withdrawal_requests'));
-        for (const d of wdSnap.docs) {
-          const w = d.data();
-          if (w.uid === finalUid || (w.userEmail && w.userEmail.toLowerCase() === finalEmail)) {
-            await deleteDoc(doc(db, 'withdrawal_requests', d.id));
-          }
-        }
-
-        // Code Orders
-        const coSnap = await getDocs(collection(db, 'code_orders'));
-        for (const d of coSnap.docs) {
-          const c = d.data();
-          if (c.uid === finalUid || (c.userEmail && c.userEmail.toLowerCase() === finalEmail)) {
-            await deleteDoc(doc(db, 'code_orders', d.id));
-          }
-        }
-
-        // Deposit Requests
-        const depSnap = await getDocs(collection(db, 'deposit_requests'));
-        for (const d of depSnap.docs) {
-          const dep = d.data();
-          if (dep.uid === finalUid || (dep.userEmail && dep.userEmail.toLowerCase() === finalEmail)) {
-            await deleteDoc(doc(db, 'deposit_requests', d.id));
-          }
-        }
-
-        // Referrals
-        const refSnap = await getDocs(collection(db, 'referrals'));
-        for (const d of refSnap.docs) {
-          const r = d.data();
-          if (
-            r.referrerUid === finalUid ||
-            r.referredUid === finalUid ||
-            (r.referrerEmail && r.referrerEmail.toLowerCase() === finalEmail) ||
-            (r.referredEmail && r.referredEmail.toLowerCase() === finalEmail)
-          ) {
-            await deleteDoc(doc(db, 'referrals', d.id));
-          }
-        }
-      } catch (relErr) {
-        console.warn('Deleting related Firestore records note:', relErr);
-      }
-
-      // 4. Delete user files from Firebase Storage
-      try {
-        await deleteUserStorageFiles(finalUid);
+        await withTimeout(deleteUserStorageFiles(finalUid), 2000);
       } catch (stErr) {
         console.warn('Firebase Storage file cleanup note:', stErr);
       }
 
-      // 5. Invoke backend server endpoint to ensure server-side deletion
+      // 5. Invoke backend server endpoint to ensure server-side deletion with timeout
       try {
-        await fetch('/api/admin/delete-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: finalUid, email: finalEmail })
-        });
+        await withTimeout(
+          fetch('/api/admin/delete-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: finalUid, email: finalEmail })
+          }),
+          2500
+        );
       } catch (apiErr) {
         console.warn('Backend delete-user call note:', apiErr);
       }
