@@ -41,6 +41,7 @@ export interface UserProfile {
   role: 'admin' | 'user';
   hasActiveCode: boolean;
   activeCashbackCode?: string;
+  passwordHash?: string;
   isFrozen?: boolean;
   frozenReason?: string;
   frozenAt?: number;

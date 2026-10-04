@@ -844,12 +844,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const emailKey = data.email.trim().toLowerCase();
       const registry = getRegisteredUsersMap();
       if (registry[emailKey]) {
-        throw new Error('An account with this email already exists. Please login.');
+        throw new Error('An account with this email address already exists. Please login.');
+      }
+
+      // Check Firestore to prevent duplicate email registrations across devices
+      try {
+        const q = query(collection(db, 'users'), where('email', '==', emailKey));
+        const existingSnap = await getDocs(q);
+        if (!existingSnap.empty) {
+          throw new Error('An account with this email address already exists. Please login.');
+        }
+      } catch (e: any) {
+        if (e.message?.includes('already exists')) {
+          throw e;
+        }
       }
 
       const isMathias = emailKey === ADMIN_CREDENTIALS.email.toLowerCase();
       const newUid = 'palm-usr-' + Date.now().toString(36);
       const accNum = formatOrGeneratePalmPayAccountNumber(data.phone, newUid);
+      const userPassword = data.password || 'Coded25.';
 
       const newProfile: UserProfile = {
         uid: newUid,
@@ -866,10 +880,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         memberSince: 'Sept 2026',
         role: isMathias ? 'admin' : 'user',
         hasActiveCode: isMathias,
-        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
+        activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined,
+        passwordHash: userPassword
       };
 
-      saveRegisteredUser(newProfile, data.password || 'Coded25.');
+      saveRegisteredUser(newProfile, userPassword);
       sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(newProfile));
       setUser(newProfile);
 
@@ -962,9 +977,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const emailKey = email.trim().toLowerCase();
 
+      if (!emailKey) {
+        throw new Error('Please enter your account email.');
+      }
+
+      if (!password || !password.trim()) {
+        throw new Error('Please enter your password.');
+      }
+
+      // 1. Admin Credentials Check
       if (emailKey === ADMIN_CREDENTIALS.email.toLowerCase()) {
-        if (password && password !== ADMIN_CREDENTIALS.password) {
-          throw new Error('Invalid Admin password.');
+        if (password !== ADMIN_CREDENTIALS.password) {
+          throw new Error('Incorrect password. Please verify your credentials.');
         }
         const admin = createAdminProfile();
         saveRegisteredUser(admin, ADMIN_CREDENTIALS.password);
@@ -973,72 +997,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // 2. Look up user in local registry and Firestore
       const registry = getRegisteredUsersMap();
-      const existing = registry[emailKey];
+      const existingInRegistry = registry[emailKey];
+      let firestoreProfile: (UserProfile & { passwordHash?: string }) | null = null;
 
-      if (existing) {
-        if (password && existing.passwordHash && existing.passwordHash !== password) {
-          throw new Error('Incorrect password. Please verify your credentials.');
+      try {
+        const q = query(collection(db, 'users'), where('email', '==', emailKey));
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          firestoreProfile = querySnap.docs[0].data() as (UserProfile & { passwordHash?: string });
         }
+      } catch (e) {
+        console.warn('Firestore login user search note:', e);
+      }
 
-        let mergedProfile = { ...existing.profile };
+      // Reject login for unregistered users
+      if (!existingInRegistry && !firestoreProfile) {
+        throw new Error('No registered account found with this email. Please register an account first.');
+      }
+
+      // Extract existing profile and registered password
+      const profileToUse: UserProfile = firestoreProfile || existingInRegistry.profile;
+      const expectedPassword = existingInRegistry?.passwordHash || firestoreProfile?.passwordHash;
+
+      // Reject login for incorrect password
+      if (expectedPassword && password !== expectedPassword) {
+        throw new Error('Incorrect password. Please verify your credentials.');
+      }
+
+      let mergedProfile = { ...profileToUse };
+
+      if (!mergedProfile.accountNumber) {
+        mergedProfile.accountNumber = formatOrGeneratePalmPayAccountNumber(mergedProfile.phone, mergedProfile.uid);
         try {
-          const docSnap = await getDoc(doc(db, 'users', existing.profile.uid));
-          if (docSnap.exists()) {
-            mergedProfile = { ...mergedProfile, ...(docSnap.data() as UserProfile) };
-          }
+          await updateDoc(doc(db, 'users', mergedProfile.uid), { accountNumber: mergedProfile.accountNumber });
         } catch (e) {
-          console.warn('Login firestore merge note:', e);
-        }
-
-        if (!mergedProfile.accountNumber) {
-          mergedProfile.accountNumber = formatOrGeneratePalmPayAccountNumber(mergedProfile.phone, mergedProfile.uid);
-          try {
-            await updateDoc(doc(db, 'users', mergedProfile.uid), { accountNumber: mergedProfile.accountNumber });
-          } catch (e) {
-            console.warn('Login active account update note:', e);
-          }
-        }
-
-        if (mergedProfile.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
-          mergedProfile.hasActiveCode = true;
-          mergedProfile.activeCashbackCode = OFFICIAL_CASHBACK_CODE;
-        }
-
-        saveRegisteredUser(mergedProfile, existing.passwordHash);
-        sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(mergedProfile));
-        setUser(mergedProfile);
-      } else {
-        const isMathias = emailKey === ADMIN_CREDENTIALS.email.toLowerCase();
-        const newUid = 'palm-usr-' + Date.now().toString(36);
-        const accNum = formatOrGeneratePalmPayAccountNumber(undefined, newUid);
-        const newProfile: UserProfile = {
-          uid: newUid,
-          email: email.trim(),
-          displayName: email.split('@')[0],
-          accountNumber: accNum,
-          phone: accNum,
-          balance: 0,
-          depositBalance: 0,
-          referralCode: generateReferralCode(email.split('@')[0]),
-          referralCount: 0,
-          signupBonusClaimed: false,
-          memberSince: 'Sept 2026',
-          role: isMathias ? 'admin' : 'user',
-          hasActiveCode: isMathias,
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
-        };
-
-        saveRegisteredUser(newProfile, password || 'Coded25.');
-        sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(newProfile));
-        setUser(newProfile);
-
-        try {
-          await setDoc(doc(db, 'users', newUid), newProfile);
-        } catch (e) {
-          console.warn('Firestore login user save error:', e);
+          console.warn('Login active account update note:', e);
         }
       }
+
+      if (mergedProfile.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
+        mergedProfile.hasActiveCode = true;
+        mergedProfile.activeCashbackCode = OFFICIAL_CASHBACK_CODE;
+      }
+
+      const activePasswordToSave = expectedPassword || password;
+      mergedProfile.passwordHash = activePasswordToSave;
+
+      saveRegisteredUser(mergedProfile, activePasswordToSave);
+      sessionStorage.setItem('palmpay_current_session_user', JSON.stringify(mergedProfile));
+      setUser(mergedProfile);
     } finally {
       setLoading(false);
     }
@@ -1075,18 +1084,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const querySnap = await getDocs(q);
           if (!querySnap.empty) {
             existingProfile = querySnap.docs[0].data() as UserProfile;
+            existingPasswordHash = (querySnap.docs[0].data() as any).passwordHash;
           }
         } catch (e) {
           console.warn('Firestore email search note:', e);
         }
       }
 
-      // 3. Check Firestore by fbUser.uid
-      let userDocByUid = null;
-      try {
-        userDocByUid = await getDoc(doc(db, 'users', fbUser.uid));
-      } catch (e) {
-        console.warn('Firestore uid search note:', e);
+      // Reject Google sign-in for unregistered non-admin users
+      if (!existingProfile && !isMathias) {
+        throw new Error(`No registered account found for ${googleEmail}. Please register an account first.`);
       }
 
       let profileToUse: UserProfile;
@@ -1111,42 +1118,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {
           console.warn('Firestore linked account update note:', e);
         }
-      } else if (userDocByUid && userDocByUid.exists()) {
-        const docData = userDocByUid.data() as UserProfile;
-        profileToUse = {
-          ...docData,
-          displayName: fbUser.displayName || docData.displayName,
-          photoURL: fbUser.photoURL || docData.photoURL,
-          role: isMathias ? 'admin' : docData.role,
-          hasActiveCode: isMathias ? true : (docData.hasActiveCode || false),
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : docData.activeCashbackCode
-        };
       } else {
-        // Create new profile for Google user
-        const googleAcc = formatOrGeneratePalmPayAccountNumber(undefined, fbUser.uid);
-        profileToUse = {
-          uid: fbUser.uid,
-          email: googleEmail,
-          displayName: fbUser.displayName || googleEmail.split('@')[0],
-          photoURL: fbUser.photoURL || undefined,
-          accountNumber: googleAcc,
-          phone: googleAcc,
-          balance: 0,
-          depositBalance: 0,
-          referralCode: generateReferralCode(fbUser.displayName || googleEmail.split('@')[0]),
-          referralCount: 0,
-          signupBonusClaimed: false,
-          memberSince: 'Sept 2026',
-          role: isMathias ? 'admin' : 'user',
-          hasActiveCode: isMathias,
-          activeCashbackCode: isMathias ? OFFICIAL_CASHBACK_CODE : undefined
-        };
-
-        try {
-          await setDoc(doc(db, 'users', fbUser.uid), profileToUse);
-        } catch (e) {
-          console.warn('Firestore new Google user save note:', e);
-        }
+        // Admin profile fallback
+        profileToUse = createAdminProfile();
       }
 
       if (!profileToUse.accountNumber) {
