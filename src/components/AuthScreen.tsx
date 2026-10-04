@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, Phone, Hash, ArrowRight, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Mail, Lock, User, Phone, Hash, ArrowRight, ArrowLeft, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { PalmPayLogo } from './PalmPayLogo';
 
 interface AuthScreenProps {
   onSuccess?: () => void;
+  onBackToWelcome?: () => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess, onBackToWelcome }) => {
   const { registerUser, loginUser, loginWithGoogle } = useAuth();
   const { triggerCelebration } = useCelebration();
   
@@ -101,8 +102,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-3 sm:p-6">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-4 sm:space-y-6">
         
+        {/* Back to Welcome Screen Button */}
+        {onBackToWelcome && (
+          <button
+            type="button"
+            onClick={onBackToWelcome}
+            className="inline-flex items-center gap-1.5 text-xs text-purple-300 hover:text-white transition-colors px-3 py-1.5 rounded-xl mirror-glass hover:bg-white/10 border border-purple-500/20 active:scale-95"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>← Back to Welcome Page</span>
+          </button>
+        )}
+
         {/* Top PalmPay Brand Emblem */}
         <div className="text-center space-y-2">
           <div className="inline-block transition-transform hover:scale-105">

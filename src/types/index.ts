@@ -1,4 +1,5 @@
 export type NavigationPage = 
+  | 'welcome'
   | 'dashboard' 
   | 'game' 
   | 'code' 

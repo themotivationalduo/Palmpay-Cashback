@@ -22,6 +22,7 @@ import { SettingsProfileModal } from './components/SettingsProfileModal';
 import { AdminPanel } from './components/AdminPanel';
 import { Footer } from './components/Footer';
 import { AuthScreen } from './components/AuthScreen';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { SplashScreen } from './components/SplashScreen';
 import { CommunityModal, AddMoneyModal, SupportModal } from './components/Modals/QuickActionModals';
 import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
@@ -57,6 +58,16 @@ const DashboardContent: React.FC<{
 }) => {
   return (
     <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8 min-h-[75vh]">
+      {/* 0. Standalone Welcome Page */}
+      {currentPage === 'welcome' && (
+        <div className="animate-in fade-in duration-300">
+          <WelcomeScreen
+            onGetStarted={() => setCurrentPage('dashboard')}
+            onOpenTerms={() => setCurrentPage('support')}
+          />
+        </div>
+      )}
+
       {/* 1. Main Dashboard View */}
       {currentPage === 'dashboard' && (
         <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
@@ -146,6 +157,7 @@ const DashboardContent: React.FC<{
             isStandalone={true}
             onClose={() => setCurrentPage('dashboard')}
             onOpenAdminPanel={() => setCurrentPage('admin')}
+            onOpenWelcome={() => setCurrentPage('welcome')}
           />
         </div>
       )}
@@ -196,6 +208,7 @@ const DashboardContent: React.FC<{
 const getPageFromPath = (): NavigationPage => {
   if (typeof window === 'undefined') return 'dashboard';
   const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
+  if (path.endsWith('/welcome') || path.endsWith('/landing') || path.endsWith('/intro')) return 'welcome';
   if (path.endsWith('/game')) return 'game';
   if (path.endsWith('/code') || path.endsWith('/buy-code')) return 'buy-code';
   if (path.endsWith('/withdraw')) return 'withdraw';
@@ -214,6 +227,15 @@ const MainAppContent: React.FC = () => {
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [currentPage, setCurrentPageState] = useState<NavigationPage>(() => getPageFromPath());
   const [adminSubPage, setAdminSubPage] = useState<AdminSubPage>('overview');
+  const [showAuthForm, setShowAuthForm] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname.toLowerCase();
+      if (p.includes('/login') || p.includes('/register') || p.includes('/auth') || p.includes('/signin')) {
+        return true;
+      }
+    }
+    return false;
+  });
   const [selectedNotification, setSelectedNotification] = useState<PlatformNotification | null>(null);
   
   const [showWAModal, setShowWAModal] = useState<boolean>(false);
@@ -274,6 +296,19 @@ const MainAppContent: React.FC = () => {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // If user is not authenticated and hasn't clicked "Get Started", show the exact Welcome Page
+  if (!user && !showAuthForm) {
+    return (
+      <>
+        {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+        <WelcomeScreen
+          onGetStarted={() => setShowAuthForm(true)}
+          onOpenTerms={() => setShowAuthForm(true)}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -337,7 +372,7 @@ const MainAppContent: React.FC = () => {
 
       {/* Conditional Rendering: If user is not registered / logged in, require account registration */}
       {!user ? (
-        <AuthScreen />
+        <AuthScreen onBackToWelcome={() => setShowAuthForm(false)} />
       ) : (
         <>
           {/* Central Dashboard / Standalone Pages View */}
@@ -377,7 +412,15 @@ const MainAppContent: React.FC = () => {
       <CelebrationModal />
 
       {/* Footer & Compliance Bar with CBN License */}
-      <Footer />
+      <Footer
+        onOpenWelcome={() => {
+          if (!user) {
+            setShowAuthForm(false);
+          } else {
+            setCurrentPage('welcome');
+          }
+        }}
+      />
     </div>
     </>
   );

@@ -7,6 +7,7 @@ interface SettingsProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenAdminPanel?: () => void;
+  onOpenWelcome?: () => void;
   isStandalone?: boolean;
 }
 
@@ -14,6 +15,7 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   isOpen,
   onClose,
   onOpenAdminPanel,
+  onOpenWelcome,
   isStandalone = false
 }) => {
   const { user, logout, isAdmin, referrals } = useAuth();
@@ -286,7 +288,7 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
           </div>
 
           {/* WhatsApp Support Channel */}
-          <div className="pt-1">
+          <div className="pt-1 space-y-2">
             <button
               type="button"
               onClick={() => window.open('https://whatsapp.com/channel/0029Vb7iKzx9Gv7YcWX4Vv1C', '_blank', 'noopener,noreferrer')}
@@ -297,6 +299,22 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
                 24/7 Live
               </span>
             </button>
+
+            {onOpenWelcome && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenWelcome();
+                }}
+                className="w-full py-2.5 px-3.5 rounded-2xl bg-[#1865D8]/15 hover:bg-[#1865D8]/25 text-blue-400 font-bold text-xs flex items-center justify-between border border-blue-500/35 shadow-sm transition-all active:scale-95"
+              >
+                <span>View Welcome &amp; Rewards Overview</span>
+                <span className="text-[10px] uppercase font-black bg-[#1865D8] text-white px-2 py-0.5 rounded-md">
+                  Welcome
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Admin Indicator (Only shown if already logged in as Admin) */}

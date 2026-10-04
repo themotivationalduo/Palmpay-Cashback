@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Lock, ExternalLink, FileText, CheckCircle2 } from 'lucide-react';
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onOpenWelcome?: () => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onOpenWelcome }) => {
   const [modalType, setModalType] = useState<'privacy' | 'terms' | 'contact' | null>(null);
 
   return (
@@ -35,8 +39,19 @@ export const Footer: React.FC = () => {
             PalmPay Cashback provides automated consumer cashback disbursements and gamified rewards under CBN regulatory frameworks. All funds held and transferred are 100% insured.
           </p>
 
-          {/* Text link navigation for "Privacy Policy", "Terms of Service", and "Contact Us" */}
+          {/* Text link navigation for "Privacy Policy", "Terms of Service", "Welcome Page", and "Contact Us" */}
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-400 font-medium">
+            {onOpenWelcome && (
+              <>
+                <button
+                  onClick={onOpenWelcome}
+                  className="hover:text-blue-400 text-blue-300/90 transition-colors underline decoration-blue-500/40 hover:decoration-blue-400 font-semibold"
+                >
+                  Welcome Page
+                </button>
+                <span>•</span>
+              </>
+            )}
             <button
               onClick={() => setModalType('privacy')}
               className="hover:text-white transition-colors underline decoration-slate-600 hover:decoration-white"
