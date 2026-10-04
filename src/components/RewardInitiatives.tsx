@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award, RefreshCw, Clock } from 'lucide-react';
+import { Gift, CalendarCheck, Users, Copy, Check, Sparkles, ChevronRight, Award, RefreshCw, Clock, Share2, Link } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
+import { getReferralUrl, getReferralShareMessage } from '../utils/referral';
 
 interface RewardInitiativesProps {
   onOpenReferralModal: () => void;
@@ -56,6 +57,21 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
 
   const isDailyClaimed = timeLeftMs > 0;
   const referralCode = user?.referralCode || 'PALM2026';
+  const referralUrl = getReferralUrl(referralCode);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(referralUrl);
+    setCopiedLink(true);
+    triggerCelebration({
+      title: 'VIP Invitation Link Copied! 🔗',
+      subtitle: `Link "${referralUrl}" copied. Referees who open this link have your code prefilled automatically!`,
+      type: 'copy',
+      duration: 3000,
+      confettiIntensity: 'low'
+    });
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode);
@@ -277,22 +293,36 @@ export const RewardInitiatives: React.FC<RewardInitiativesProps> = ({ onOpenRefe
           </div>
 
           <div className="mt-4 pt-3 border-t border-purple-500/20 flex flex-col gap-2">
-            <div className="flex items-center justify-between bg-black/50 rounded-xl px-2.5 py-1.5 border border-purple-500/30">
-              <span className="text-xs font-mono font-bold text-white tracking-wider">
-                {referralCode}
-              </span>
-              <button
-                onClick={handleCopyCode}
-                className="text-xs text-purple-200 hover:text-white font-semibold flex items-center gap-1 bg-purple-600/30 hover:bg-purple-600/50 px-2.5 py-1 rounded-lg transition-colors border border-purple-400/30"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-amber-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
-              </button>
+            {/* Full Referral URL Box */}
+            <div className="bg-black/60 rounded-xl p-2 border border-purple-500/30 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-purple-300">
+                <span className="font-mono truncate">{referralUrl}</span>
+                <span className="text-[#FFC107] font-bold shrink-0 ml-1">Auto-Prefill</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="flex-1 py-1.5 rounded-lg bg-gradient-to-r from-[#621494] to-[#7E1DC6] text-white text-[11px] font-bold flex items-center justify-center gap-1 hover:opacity-95 transition-all shadow-sm border border-purple-300/30 cursor-pointer"
+                >
+                  {copiedLink ? <Check className="w-3 h-3 text-[#FFC107]" /> : <Link className="w-3 h-3" />}
+                  <span>{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className="py-1.5 px-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-slate-200 text-[11px] font-semibold flex items-center gap-1 border border-white/15 transition-all cursor-pointer"
+                  title="Copy code only"
+                >
+                  {copied ? <Check className="w-3 h-3 text-amber-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Code Copied' : 'Code'}</span>
+                </button>
+              </div>
             </div>
 
             <button
               onClick={onOpenReferralModal}
-              className="text-xs text-purple-200/80 hover:text-white flex items-center justify-center gap-1 hover:underline pt-1"
+              className="text-xs text-purple-200/80 hover:text-white flex items-center justify-center gap-1 hover:underline pt-1 cursor-pointer"
             >
               <span>View Invite Leaderboard</span>
               <ChevronRight className="w-3.5 h-3.5" />

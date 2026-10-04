@@ -1801,8 +1801,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 1. Update target user document in Firestore by UID
       if (orderData.uid) {
         await setDoc(doc(db, 'users', orderData.uid), {
+          uid: orderData.uid,
           hasActiveCode: true,
-          activeCashbackCode: finalCode
+          activeCashbackCode: finalCode,
+          ...(orderData.userEmail ? { email: orderData.userEmail } : {})
         }, { merge: true });
       }
 
@@ -1816,6 +1818,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const uEmail = (u.email || '').trim().toLowerCase();
             if (uEmail === targetEmail || uDoc.id === orderData.uid) {
               await setDoc(doc(db, 'users', uDoc.id), {
+                uid: u.uid || uDoc.id,
+                email: u.email || targetEmail,
                 hasActiveCode: true,
                 activeCashbackCode: finalCode
               }, { merge: true });
@@ -2136,8 +2140,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const codesSnap = await getDocs(collection(db, 'code_orders'));
         codesSnap.forEach((docSnap) => {
           const c = docSnap.data() as CodeOrder;
-          const matches = c.uid === user.uid || (c.userEmail && c.userEmail.toLowerCase() === user.email.toLowerCase());
-          if (matches && c.status === 'approved' && c.generatedCode && !c.generatedCode.toLowerCase().includes('pending')) {
+          const cCode = (c.generatedCode || '').trim().toLowerCase();
+          const matches = Boolean(
+            c.uid === user.uid ||
+            (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase()) ||
+            (c.phoneNumber && user.phone && c.phoneNumber.trim() === user.phone.trim()) ||
+            (c.accountNumber && user.accountNumber && c.accountNumber.trim() === user.accountNumber.trim())
+          );
+          if (matches && c.status === 'approved' && cCode && !cCode.includes('pending')) {
             const validApproved = c.generatedCode.trim();
             userHasCode = true;
             if (cleanCode.toLowerCase() === validApproved.toLowerCase()) {
@@ -2145,10 +2155,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else if (!assignedCode || assignedCode.includes('pending')) {
               assignedCode = validApproved.toLowerCase();
             }
-            // Auto-activate user
+            // Auto-activate user profile in Firestore
             setDoc(doc(db, 'users', user.uid), {
+              uid: user.uid,
               hasActiveCode: true,
-              activeCashbackCode: validApproved
+              activeCashbackCode: validApproved,
+              ...(user.email ? { email: user.email } : {}),
+              ...(user.accountNumber ? { accountNumber: user.accountNumber } : {})
             }, { merge: true }).catch(() => {});
             user.hasActiveCode = true;
             user.activeCashbackCode = validApproved;
@@ -2172,23 +2185,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    // Verify this code is not registered to another user account
+    // Verify this code is not registered to an entirely separate, unrelated user account
     try {
-      const usersRef = collection(db, 'users');
-      const usersSnap = await getDocs(usersRef);
-      let belongsToAnotherUser = false;
+      // 1. First check if the code was ordered/approved for this current user in code_orders
+      let isUsersOwnPurchasedCode = false;
+      try {
+        const ordersSnap = await getDocs(collection(db, 'code_orders'));
+        ordersSnap.forEach((oDoc) => {
+          const o = oDoc.data() as CodeOrder;
+          const oCode = (o.generatedCode || '').trim().toLowerCase();
+          if (oCode === cleanCode.toLowerCase() && o.status === 'approved') {
+            const matchesUser = Boolean(
+              (o.uid && (o.uid === user.uid || o.uid === (user as any).id)) ||
+              (o.userEmail && user.email && o.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase()) ||
+              (o.phoneNumber && user.phone && o.phoneNumber.trim() === user.phone.trim()) ||
+              (o.accountNumber && user.accountNumber && o.accountNumber.trim() === user.accountNumber.trim())
+            );
+            if (matchesUser) {
+              isUsersOwnPurchasedCode = true;
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('code_orders ownership check note:', e);
+      }
 
-      usersSnap.forEach((uDoc) => {
-        const u = uDoc.data() as UserProfile;
-        if (u.uid !== user.uid && u.activeCashbackCode && u.activeCashbackCode.trim().toLowerCase() === cleanCode.toLowerCase()) {
-          belongsToAnotherUser = true;
+      // If user's own profile already has this code active, or they purchased it: they are the legitimate owner!
+      const userOwnsThisCode = isUsersOwnPurchasedCode || 
+        (user.activeCashbackCode && user.activeCashbackCode.trim().toLowerCase() === cleanCode.toLowerCase()) ||
+        (assignedCode === cleanCode.toLowerCase());
+
+      if (!userOwnsThisCode) {
+        const usersRef = collection(db, 'users');
+        const usersSnap = await getDocs(usersRef);
+        let belongsToAnotherUser = false;
+
+        usersSnap.forEach((uDoc) => {
+          const u = uDoc.data() as UserProfile;
+          const uDocUid = u.uid || uDoc.id;
+          const isSameUser = Boolean(
+            uDocUid === user.uid ||
+            uDoc.id === user.uid ||
+            (u.email && user.email && u.email.trim().toLowerCase() === user.email.trim().toLowerCase()) ||
+            (u.phone && user.phone && u.phone.trim() === user.phone.trim()) ||
+            (u.accountNumber && user.accountNumber && u.accountNumber.trim() === user.accountNumber.trim())
+          );
+
+          if (!isSameUser && u.activeCashbackCode && u.activeCashbackCode.trim().toLowerCase() === cleanCode.toLowerCase()) {
+            belongsToAnotherUser = true;
+          }
+        });
+
+        if (belongsToAnotherUser) {
+          throw new Error(
+            'Invalid CashBack Code. The entered CashBack Code belongs to another account and cannot be used for withdrawals on this account.'
+          );
         }
-      });
-
-      if (belongsToAnotherUser) {
-        throw new Error(
-          'Invalid CashBack Code. The entered CashBack Code belongs to another account and cannot be used for withdrawals on this account.'
-        );
       }
     } catch (err: any) {
       if (err.message && err.message.includes('Invalid CashBack Code')) {

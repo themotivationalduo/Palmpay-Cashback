@@ -169,7 +169,9 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
             const matchesUser = Boolean(
               user && (
                 c.uid === user.uid ||
-                (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase())
+                (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase()) ||
+                (c.phoneNumber && user.phone && c.phoneNumber.trim() === user.phone.trim()) ||
+                (c.accountNumber && user.accountNumber && c.accountNumber.trim() === user.accountNumber.trim())
               )
             );
 
@@ -516,7 +518,9 @@ export const WithdrawalModal: React.FC<WithdrawalModalProps> = ({
         const isUser = Boolean(
           user && (
             c.uid === user.uid ||
-            (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase())
+            (c.userEmail && user.email && c.userEmail.trim().toLowerCase() === user.email.trim().toLowerCase()) ||
+            (c.phoneNumber && user.phone && c.phoneNumber.trim() === user.phone.trim()) ||
+            (c.accountNumber && user.accountNumber && c.accountNumber.trim() === user.accountNumber.trim())
           )
         );
         const cCode = (c.generatedCode || '').trim().toLowerCase();

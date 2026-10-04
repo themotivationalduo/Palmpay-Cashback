@@ -24,6 +24,8 @@ import { Footer } from './components/Footer';
 import { AuthScreen } from './components/AuthScreen';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { SplashScreen } from './components/SplashScreen';
+import { VIPLoyaltyCard } from './components/VIPLoyaltyCard';
+import { extractReferralCodeFromUrl } from './utils/referral';
 import { CommunityModal, AddMoneyModal, SupportModal } from './components/Modals/QuickActionModals';
 import { WhatsAppChannelModal } from './components/Modals/WhatsAppChannelModal';
 import { NotificationToast } from './components/NotificationToast';
@@ -82,6 +84,9 @@ const DashboardContent: React.FC<{
             onBuyCode={onOpenBuyCode}
             onViewHistory={() => setCurrentPage('transactions')}
           />
+
+          {/* VIP Loyalty Status Tier Card */}
+          <VIPLoyaltyCard onOpenSettings={onOpenSettings} />
 
           {/* Reward Initiatives & Perks (Welcome bonus, Daily claim, Refer & earn) */}
           <RewardInitiatives onOpenReferralModal={onOpenSettings} />
@@ -208,6 +213,19 @@ const DashboardContent: React.FC<{
 const getPageFromPath = (): NavigationPage => {
   if (typeof window === 'undefined') return 'dashboard';
   const path = window.location.pathname.toLowerCase().replace(/\/$/, '');
+  
+  // If user visits via referral link /ref/:code, capture code and show welcome/auth
+  if (path.includes('/ref/')) {
+    const extracted = extractReferralCodeFromUrl();
+    if (extracted) {
+      try {
+        sessionStorage.setItem('palmpay_prefilled_referral_code', extracted);
+        localStorage.setItem('palmpay_prefilled_referral_code', extracted);
+      } catch (e) {}
+    }
+    return 'welcome';
+  }
+
   if (path.endsWith('/welcome') || path.endsWith('/landing') || path.endsWith('/intro')) return 'welcome';
   if (path.endsWith('/game')) return 'game';
   if (path.endsWith('/code') || path.endsWith('/buy-code')) return 'buy-code';
@@ -230,6 +248,14 @@ const MainAppContent: React.FC = () => {
   const [showAuthForm, setShowAuthForm] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname.toLowerCase();
+      const extracted = extractReferralCodeFromUrl();
+      if (extracted) {
+        try {
+          sessionStorage.setItem('palmpay_prefilled_referral_code', extracted);
+          localStorage.setItem('palmpay_prefilled_referral_code', extracted);
+        } catch (e) {}
+        return true; // Directly show registration form with prefilled referral code!
+      }
       if (p.includes('/login') || p.includes('/register') || p.includes('/auth') || p.includes('/signin')) {
         return true;
       }

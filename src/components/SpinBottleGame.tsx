@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Trophy, RotateCcw, Volume2, VolumeX, ShieldCheck, Flame, ArrowLeft, Wallet, AlertCircle, Plus, ExternalLink } from 'lucide-react';
 import { useAuth, PAYSTACK_DEPOSIT_URL } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import confetti from 'canvas-confetti';
+import gsap from 'gsap';
 
 interface PrizeSlot {
   label: string;
@@ -35,9 +36,24 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
   const [gamesPlayed, setGamesPlayed] = useState(12);
   const [totalWon, setTotalWon] = useState(48500);
 
+  const bottleRef = useRef<HTMLDivElement>(null);
+  const currentRotationRef = useRef<number>(0);
+  const activeTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
   const depositBal = user?.depositBalance ?? 0;
+
+  // Cleanup GSAP tweens on component unmount
+  useEffect(() => {
+    return () => {
+      if (activeTimelineRef.current) {
+        activeTimelineRef.current.kill();
+      }
+      if (bottleRef.current) {
+        gsap.killTweensOf(bottleRef.current);
+      }
+    };
+  }, []);
 
   const playBeep = (freq: number, duration: number, type: OscillatorType = 'sine') => {
     if (!soundEnabled) return;
@@ -64,6 +80,31 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     }
   };
 
+  const playTick = (freq: number, duration: number = 0.035) => {
+    if (!soundEnabled) return;
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch {
+      // Audio fallback
+    }
+  };
+
   const handleSpin = async () => {
     if (spinning) return;
 
@@ -76,67 +117,115 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
     setSpinning(true);
     setGameResultModal(null);
 
-    // Pick target prize - 65% chance of win, biased towards ₦5,500
-    const rand = Math.random();
-    let selectedIndex: number;
-    if (rand < 0.45) {
-      selectedIndex = 0; // ₦5,500 slot!
-    } else if (rand < 0.70) {
-      selectedIndex = 2; // ₦2,500
-    } else if (rand < 0.85) {
-      selectedIndex = 1; // Try Again (0)
-    } else {
-      selectedIndex = 4; // ₦0
-    }
-
-    const selectedPrize = PRIZE_SLOTS[selectedIndex];
+    // Pick a truly random reward segment across all segments in PRIZE_SLOTS
+    const randomIndex = Math.floor(Math.random() * PRIZE_SLOTS.length);
+    const selectedPrize = PRIZE_SLOTS[randomIndex];
 
     // Deduct entry fee ₦1,000 strictly from deposited balance
     await updateBalance(-1000, "Spin da' Bottle Entry Fee", 'game_loss', 'debit', 'deposit');
 
-    // Calculate rotation: at least 5-7 full spins + slot angle
-    const extraRounds = 5 * 360;
-    const targetAngle = 360 - selectedPrize.angle;
-    const finalRotation = rotation + extraRounds + (targetAngle - (rotation % 360));
+    // Calculate rotation: at least 6-8 full spins + slot angle
+    const minSpins = 6 + Math.floor(Math.random() * 3); // 6 to 8 full spins
+    const targetAngle = selectedPrize.angle;
+    const currentRot = currentRotationRef.current;
+    const currentMod = ((currentRot % 360) + 360) % 360;
+    let forwardDelta = targetAngle - currentMod;
+    if (forwardDelta <= 0) {
+      forwardDelta += 360;
+    }
+    const finalRotation = currentRot + (minSpins * 360) + forwardDelta;
 
-    setRotation(finalRotation);
+    // Kill any existing tween
+    if (activeTimelineRef.current) {
+      activeTimelineRef.current.kill();
+    }
 
-    // Play spinning ticks
-    let tickCount = 0;
-    const tickInterval = setInterval(() => {
-      playBeep(450 + (tickCount % 5) * 40, 0.05, 'triangle');
-      tickCount++;
-      if (tickCount > 18) clearInterval(tickInterval);
-    }, 180);
+    const spinData = {
+      rot: currentRot,
+    };
 
-    // After animation finishes (3.5 seconds)
-    setTimeout(async () => {
-      setSpinning(false);
-      setLastPrize(selectedPrize);
-      setGamesPlayed((p) => p + 1);
+    let lastTickAngle = currentRot;
 
-      if (selectedPrize.isWin) {
-        // Game win! Added to deposited balance
-        playBeep(784, 0.25, 'sine');
-        setTimeout(() => playBeep(1046, 0.4, 'sine'), 150);
-        
-        triggerCelebration({
-          title: `You Won ${selectedPrize.label}! 🏆`,
-          subtitle: `Congratulations! ${selectedPrize.label} reward has been credited directly to your Deposited Balance.`,
-          type: 'game',
-          amount: selectedPrize.label,
-          duration: 4000
-        });
+    // GSAP Physical Bottle Spin Timeline
+    const tl = gsap.timeline({
+      onComplete: async () => {
+        currentRotationRef.current = finalRotation;
+        setRotation(finalRotation);
+        setSpinning(false);
+        setLastPrize(selectedPrize);
+        setGamesPlayed((p) => p + 1);
 
-        await updateBalance(selectedPrize.amount, "Game Win - Spin da' Bottle", 'game_win', 'credit', 'deposit');
-        setTotalWon((p) => p + selectedPrize.amount);
-      } else {
-        // Game loss
-        playBeep(220, 0.35, 'sawtooth');
+        if (selectedPrize.isWin) {
+          // Game win! Added to deposited balance
+          playBeep(784, 0.25, 'sine');
+          setTimeout(() => playBeep(1046, 0.4, 'sine'), 150);
+          confetti({
+            particleCount: 90,
+            spread: 75,
+            origin: { y: 0.6 }
+          });
+          
+          triggerCelebration({
+            title: `You Won ${selectedPrize.label}! 🏆`,
+            subtitle: `Congratulations! ${selectedPrize.label} reward has been credited directly to your Deposited Balance.`,
+            type: 'game',
+            amount: selectedPrize.label,
+            duration: 4000
+          });
+
+          await updateBalance(selectedPrize.amount, "Game Win - Spin da' Bottle", 'game_win', 'credit', 'deposit');
+          setTotalWon((p) => p + selectedPrize.amount);
+        } else {
+          // Game loss
+          playBeep(220, 0.35, 'sawtooth');
+        }
+
+        setGameResultModal(selectedPrize);
       }
+    });
 
-      setGameResultModal(selectedPrize);
-    }, 3600);
+    activeTimelineRef.current = tl;
+
+    // Phase 1: High angular acceleration decaying with realistic surface friction (power4.out)
+    tl.to(spinData, {
+      rot: finalRotation,
+      duration: 3.9,
+      ease: "power4.out",
+      onUpdate: () => {
+        const cur = spinData.rot;
+        const totalDist = finalRotation - currentRot;
+        const remaining = finalRotation - cur;
+        const speed = Math.max(0, Math.min(1, remaining / totalDist));
+
+        // Centrifugal 3D wobble & tilt: replicates physical bottle rocking as it rotates fast
+        const wobbleX = Math.sin(cur * 0.08) * 8 * speed;
+        const wobbleY = Math.cos(cur * 0.08) * 8 * speed;
+        const dynamicScale = 1 + (speed * 0.04 * Math.sin(cur * 0.12));
+
+        if (bottleRef.current) {
+          bottleRef.current.style.transform = `rotate(${cur}deg) rotateX(${wobbleX}deg) rotateY(${wobbleY}deg) scale(${dynamicScale})`;
+        }
+
+        // Mechanical tick sound synced to actual angular travel over the 45-degree sector lines
+        if (Math.abs(cur - lastTickAngle) >= 45) {
+          lastTickAngle = cur;
+          const tickFreq = 380 + Math.round(speed * 280);
+          playTick(tickFreq, 0.035);
+        }
+      }
+    });
+
+    // Phase 2: Realistic Physical Glass Recoil & Settling Micro-Bounce
+    tl.to(bottleRef.current, {
+      transform: `rotate(${finalRotation + 2.2}deg) rotateX(0deg) rotateY(0deg) scale(1)`,
+      duration: 0.14,
+      ease: "power2.out"
+    });
+    tl.to(bottleRef.current, {
+      transform: `rotate(${finalRotation}deg) rotateX(0deg) rotateY(0deg) scale(1)`,
+      duration: 0.28,
+      ease: "bounce.out"
+    });
   };
 
   return (
@@ -200,14 +289,19 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
           <div className="absolute inset-0 rounded-full mirror-glass border-4 border-white/15 shadow-[inset_0_0_30px_rgba(0,0,0,0.8)] overflow-hidden">
             {PRIZE_SLOTS.map((slot, index) => {
               const rotationDeg = index * 45;
+              const isSelected = lastPrize?.angle === slot.angle;
               return (
                 <div
                   key={index}
-                  className="absolute top-0 left-1/2 w-24 -ml-12 sm:w-28 sm:-ml-14 h-1/2 origin-bottom flex flex-col items-center pt-2 sm:pt-4"
+                  className={`absolute top-0 left-1/2 w-24 -ml-12 sm:w-28 sm:-ml-14 h-1/2 origin-bottom flex flex-col items-center pt-2 sm:pt-4 transition-all duration-300 ${
+                    isSelected ? 'scale-110 z-10' : 'opacity-85'
+                  }`}
                   style={{ transform: `rotate(${rotationDeg}deg)` }}
                 >
                   <span
-                    className="text-[10px] sm:text-xs font-black tracking-tight uppercase px-1.5 sm:px-2 py-0.5 rounded-md shadow-sm border"
+                    className={`text-[10px] sm:text-xs font-black tracking-tight uppercase px-1.5 sm:px-2 py-0.5 rounded-md shadow-sm border transition-all ${
+                      isSelected ? 'ring-2 ring-white shadow-[0_0_15px_rgba(255,255,255,0.4)]' : ''
+                    }`}
                     style={{
                       backgroundColor: slot.isWin ? `${slot.color}25` : '#EF444420',
                       color: slot.color,
@@ -217,7 +311,7 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
                     {slot.label}
                   </span>
                   <div
-                    className="w-1.5 h-1.5 rounded-full mt-1.5"
+                    className={`w-1.5 h-1.5 rounded-full mt-1.5 transition-all ${isSelected ? 'scale-150 shadow-[0_0_8px_white]' : ''}`}
                     style={{ backgroundColor: slot.color }}
                   />
                 </div>
@@ -232,15 +326,22 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
             </div>
           </div>
 
-          {/* The Interactive 3D Spinning PalmPay Royal Purple Glass Bottle */}
+          {/* The Interactive 3D Spinning PalmPay Royal Purple Glass Bottle (GSAP animated) */}
           <div
-            className="relative z-20 w-14 sm:w-16 md:w-20 h-44 sm:h-52 md:h-64 flex items-center justify-center cursor-pointer will-change-transform"
-            style={{
-              transform: `rotate(${rotation}deg)`,
-              transition: spinning ? 'transform 3.5s cubic-bezier(0.15, 0.9, 0.25, 1)' : 'none'
-            }}
-            onClick={handleSpin}
+            style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}
+            className="relative z-20 flex items-center justify-center pointer-events-auto"
           >
+            <div
+              ref={bottleRef}
+              className="relative z-20 w-14 sm:w-16 md:w-20 h-44 sm:h-52 md:h-64 flex items-center justify-center cursor-pointer will-change-transform select-none"
+              style={{
+                transformOrigin: '50% 50%',
+                transform: `rotate(${rotation}deg)`,
+                transformStyle: 'preserve-3d'
+              }}
+              onClick={handleSpin}
+              title={spinning ? 'Spinning...' : 'Click bottle or button below to spin'}
+            >
             <svg viewBox="0 0 100 300" className="w-full h-full drop-shadow-[0_15px_25px_rgba(0,0,0,0.85)]">
               <rect x="42" y="10" width="16" height="15" rx="3" fill="#FFC107" stroke="#FFF" strokeWidth="1" />
               <line x1="42" y1="15" x2="58" y2="15" stroke="#000" strokeWidth="1" />
@@ -274,6 +375,7 @@ export const SpinBottleGame: React.FC<{ onBack: () => void }> = ({ onBack }) => 
               </defs>
             </svg>
           </div>
+        </div>
 
         </div>
 

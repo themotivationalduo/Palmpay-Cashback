@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift, RefreshCw } from 'lucide-react';
+import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift, RefreshCw, Link, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
+import { getReferralUrl, getReferralShareMessage } from '../utils/referral';
 
 interface SettingsProfileModalProps {
   isOpen: boolean;
@@ -28,9 +29,30 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
 
   const userEmail = user?.email || 'user@example.com';
   const referralCode = user?.referralCode || 'PALM2026';
+  const referralUrl = getReferralUrl(referralCode);
+  const [copiedLink, setCopiedLink] = useState(false);
   const memberDate = user?.memberSince || '29 September 2026';
   const totalReferralCount = Math.max(user?.referralCount || 0, referrals.length);
   const totalReferralEarnings = totalReferralCount * 2500;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(referralUrl);
+    setCopiedLink(true);
+    triggerCelebration({
+      title: 'VIP Invitation Link Copied! 🔗',
+      subtitle: `Link "${referralUrl}" copied! When opened by a referee, your invitation code is prefilled automatically.`,
+      type: 'copy',
+      duration: 3000,
+      confettiIntensity: 'low'
+    });
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleWhatsAppShare = () => {
+    const msg = getReferralShareMessage(referralCode);
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(referralCode);
@@ -130,29 +152,67 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
             </div>
           </div>
 
-          {/* Unique Referral Code Card */}
-          <div className="mirror-glass p-3.5 rounded-2xl border border-purple-500/30 space-y-2 bg-gradient-to-r from-purple-900/30 to-purple-800/10">
+          {/* Unique Referral Code & URL Link Card */}
+          <div className="mirror-glass p-3.5 sm:p-4 rounded-2xl border border-purple-500/30 space-y-3 bg-gradient-to-r from-purple-900/30 to-purple-800/10">
             <div className="flex items-center justify-between text-xs text-purple-300/90">
               <span className="flex items-center gap-1.5 font-bold text-purple-200">
                 <Hash className="w-3.5 h-3.5 text-[#FFC107]" />
-                Unique Referral Code
+                VIP Invitation Code &amp; Link
               </span>
               <span className="text-[11px] bg-amber-500/20 text-[#FFC107] font-black px-2 py-0.5 rounded-full border border-amber-500/30">
                 ₦2,500 / invite
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-base sm:text-lg font-black text-[#FFC107] tracking-wider">
-                {referralCode}
-              </span>
+
+            <div className="flex items-center justify-between bg-black/40 px-3 py-2 rounded-xl border border-purple-500/25">
+              <div>
+                <span className="text-[10px] text-slate-400 block font-semibold">Your Referral Code</span>
+                <span className="font-mono text-base font-black text-[#FFC107] tracking-wider">
+                  {referralCode}
+                </span>
+              </div>
               <button
+                type="button"
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-[#621494] to-[#7E1DC6] hover:opacity-90 text-white px-3 py-1.5 rounded-xl font-bold transition-all shadow-md border border-purple-300/30"
+                className="flex items-center gap-1 text-xs bg-white/10 hover:bg-white/15 text-slate-200 px-2.5 py-1.5 rounded-lg font-semibold transition-all border border-white/15 cursor-pointer"
+                title="Copy code only"
               >
                 {copiedCode ? <Check className="w-3.5 h-3.5 text-amber-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                <span>{copiedCode ? 'Copied' : 'Code'}</span>
               </button>
             </div>
+
+            {/* URL Link Box */}
+            <div className="space-y-1.5">
+              <div className="bg-black/60 rounded-xl px-2.5 py-1.5 border border-purple-500/30 text-[11px] font-mono text-purple-200 truncate select-all">
+                {referralUrl}
+              </div>
+
+              <div className="flex items-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-gradient-to-r from-[#621494] to-[#7E1DC6] hover:opacity-90 text-white py-2 rounded-xl font-bold transition-all shadow-md border border-purple-300/30 cursor-pointer"
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5 text-[#FFC107]" /> : <Link className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Link Copied!' : 'Copy Link (Auto-Prefills)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleWhatsAppShare}
+                  className="flex items-center justify-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl font-bold transition-all shadow-md cursor-pointer"
+                  title="Share on WhatsApp"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-tight">
+              ⚡ Referees who click your link automatically have your invitation code prefilled upon sign-up and unlock ₦150,000 welcome cashback.
+            </p>
           </div>
 
           {/* Referral History & Earnings Section */}

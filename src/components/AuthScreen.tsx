@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, User, Phone, Hash, ArrowRight, ArrowLeft, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Mail, Lock, User, Phone, Hash, ArrowRight, ArrowLeft, ShieldCheck, Sparkles, CheckCircle2, AlertCircle, RefreshCw, Gift } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { PalmPayLogo } from './PalmPayLogo';
+import { extractReferralCodeFromUrl } from '../utils/referral';
 
 interface AuthScreenProps {
   onSuccess?: () => void;
@@ -13,12 +14,31 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess, onBackToWelco
   const { registerUser, loginUser, loginWithGoogle } = useAuth();
   const { triggerCelebration } = useCelebration();
   
-  const [mode, setMode] = useState<'register' | 'login'>('login');
+  // Extract prefilled referral code from URL /ref/:code or session storage
+  const initialRefCode = (() => {
+    const fromUrl = extractReferralCodeFromUrl();
+    if (fromUrl) {
+      try {
+        sessionStorage.setItem('palmpay_prefilled_referral_code', fromUrl);
+      } catch (e) {}
+      return fromUrl;
+    }
+    if (typeof window !== 'undefined') {
+      return (
+        sessionStorage.getItem('palmpay_prefilled_referral_code') ||
+        localStorage.getItem('palmpay_prefilled_referral_code') ||
+        ''
+      );
+    }
+    return '';
+  })();
+
+  const [referralCode, setReferralCode] = useState<string>(initialRefCode);
+  const [mode, setMode] = useState<'register' | 'login'>(initialRefCode ? 'register' : 'login');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +180,28 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess, onBackToWelco
             </button>
           </div>
 
+          {/* Active Referral Invitation Banner if prefilled */}
+          {mode === 'register' && referralCode && (
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/20 via-purple-900/30 to-emerald-500/20 border border-amber-400/40 text-xs text-amber-200 flex items-center justify-between gap-2 mb-4 animate-in fade-in shadow-md">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-[#FFC107]">
+                  <Gift className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-white block text-[11px] sm:text-xs">
+                    VIP Invitation Link Activated!
+                  </span>
+                  <span className="text-[10px] sm:text-[11px] text-amber-300 font-mono">
+                    Code <strong className="text-white underline">{referralCode}</strong> prefilled • ₦150,000 bonus waiting
+                  </span>
+                </div>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 shrink-0">
+                APPLIED
+              </span>
+            </div>
+          )}
+
           {/* New User Welcome Bonus Teaser */}
           {mode === 'register' && (
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-purple-900/20 to-black/40 border border-purple-500/30 mb-5 flex items-center justify-between gap-2">
@@ -270,9 +312,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess, onBackToWelco
 
             {mode === 'register' && (
               <div>
-                <label className="text-xs font-semibold text-purple-200 block mb-1">
-                  Referral Code (Optional)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-purple-200">
+                    Referral Code (Optional)
+                  </label>
+                  {referralCode && (
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span>Invitation Code Active</span>
+                    </span>
+                  )}
+                </div>
                 <div className="relative">
                   <Hash className="w-4 h-4 text-purple-400 absolute left-3.5 top-3.5" />
                   <input

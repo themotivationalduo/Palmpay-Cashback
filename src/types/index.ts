@@ -105,6 +105,8 @@ export interface CodeOrder {
   status: 'approved' | 'pending' | 'rejected';
   paymentReference?: string;
   paymentSource?: 'paystack' | 'deposit_balance';
+  phoneNumber?: string;
+  accountNumber?: string;
   receiptImage?: string;
   adminNote?: string;
   createdAt: number | string;
