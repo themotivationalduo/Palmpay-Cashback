@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift, RefreshCw, Link, Share2 } from 'lucide-react';
+import { User, Mail, Hash, Calendar, Moon, Sun, LogOut, Copy, Check, Shield, Sparkles, Users, Award, Gift, RefreshCw, Link, Share2, Smartphone, Download, Github, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCelebration } from '../context/CelebrationContext';
 import { getReferralUrl, getReferralShareMessage } from '../utils/referral';
@@ -24,6 +24,7 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [isUltraDarkMode, setIsUltraDarkMode] = useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [showApkGuide, setShowApkGuide] = useState(false);
 
   if (!isOpen && !isStandalone) return null;
 
@@ -347,8 +348,23 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
             </button>
           </div>
 
-          {/* WhatsApp Support Channel */}
+          {/* WhatsApp Support Channel & APK Download */}
           <div className="pt-1 space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowApkGuide(true)}
+              className="w-full py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-emerald-600/20 via-[#00B875]/20 to-teal-600/20 hover:from-emerald-600/30 hover:to-teal-600/30 text-emerald-300 font-bold text-xs flex items-center justify-between border border-[#00B875]/40 shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-[#00B875]" />
+                Download App as APK (GitHub)
+              </span>
+              <span className="text-[10px] uppercase font-black bg-[#00B875] text-black px-2 py-0.5 rounded-md flex items-center gap-1">
+                <Download className="w-3 h-3" />
+                APK Build
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={() => window.open('https://whatsapp.com/channel/0029Vb7iKzx9Gv7YcWX4Vv1C', '_blank', 'noopener,noreferrer')}
@@ -415,17 +431,115 @@ export const SettingsProfileModal: React.FC<SettingsProfileModalProps> = ({
       </div>
   );
 
-  if (isStandalone) {
-    return (
-      <div className="animate-in fade-in duration-300 w-full py-2">
-        {contentMarkup}
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
-      {contentMarkup}
-    </div>
+    <>
+      {isStandalone ? (
+        <div className="animate-in fade-in duration-300 w-full py-2">
+          {contentMarkup}
+        </div>
+      ) : (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto animate-in fade-in">
+          {contentMarkup}
+        </div>
+      )}
+
+      {/* APK GitHub Guide Modal */}
+      {showApkGuide && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-xl animate-in fade-in">
+          <div className="mirror-glass-card max-w-lg w-full rounded-3xl p-5 sm:p-6 border border-[#00B875]/40 shadow-[0_25px_65px_rgba(0,0,0,0.95)] relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#00B875]/20 border border-[#00B875]/40 flex items-center justify-center text-[#00B875]">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white font-['Poppins',sans-serif]">
+                    Download APK via GitHub
+                  </h4>
+                  <p className="text-[11px] text-slate-400">Automated Android CI/CD Build</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApkGuide(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs font-bold transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-[#00B875]/10 border border-[#00B875]/30 space-y-1">
+              <span className="text-xs font-bold text-[#00B875] flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" /> Ready for GitHub Actions Build
+              </span>
+              <p className="text-[11px] text-slate-300">
+                A pre-configured GitHub Actions workflow (<code className="bg-black/40 px-1 py-0.5 rounded text-white font-mono">.github/workflows/build-apk.yml</code>) automatically builds your Android APK whenever you push to GitHub!
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-200">
+              <div className="space-y-1.5">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] font-black">1</span>
+                  Push Code to your GitHub Repo
+                </span>
+                <pre className="p-2.5 rounded-xl bg-black/60 border border-purple-500/30 text-[11px] font-mono text-purple-300 overflow-x-auto">
+git add .
+git commit -m "feat: setup APK build"
+git push origin main</pre>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[11px] font-black">2</span>
+                  Open the "Actions" Tab on GitHub
+                </span>
+                <p className="text-slate-400 text-[11px]">
+                  Go to your repository on github.com and click the <strong className="text-white">Actions</strong> tab. You will see the <strong className="text-[#00B875]">"Build Android APK"</strong> workflow running.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-[#00B875] text-black flex items-center justify-center text-[11px] font-black">3</span>
+                  Download the .apk File (Artifacts)
+                </span>
+                <p className="text-slate-400 text-[11px]">
+                  When the build finishes with a green checkmark, scroll down to <strong className="text-white">Artifacts</strong> and click <strong className="text-[#00B875]">PalmPay-CashBack-Android-APK</strong> to download and install!
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('git add . && git commit -m "feat: build apk" && git push');
+                  triggerCelebration({
+                    title: 'Git Commands Copied! 📋',
+                    subtitle: 'Push your repository to GitHub to automatically generate your APK!',
+                    type: 'copy',
+                    duration: 2500,
+                    confettiIntensity: 'low'
+                  });
+                }}
+                className="w-full py-2.5 px-4 rounded-xl bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 font-bold text-xs border border-purple-500/40 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                Copy Push Command
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowApkGuide(false)}
+                className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-all cursor-pointer"
+              >
+                Close Guide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
