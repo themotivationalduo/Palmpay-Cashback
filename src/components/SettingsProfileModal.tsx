@@ -505,7 +505,7 @@ git push origin main</pre>
                   Download the .apk File (Artifacts)
                 </span>
                 <p className="text-slate-400 text-[11px]">
-                  When the build finishes with a green checkmark, scroll down to <strong className="text-white">Artifacts</strong> and click <strong className="text-[#00B875]">PalmPay-CashBack-Android-APK</strong> to download and install!
+                  When the build finishes with a green checkmark, scroll down to <strong className="text-white">Artifacts</strong> and click <strong className="text-[#00B875]">App-Android-APK</strong> to download and install!
                 </p>
               </div>
             </div>

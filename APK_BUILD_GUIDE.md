@@ -1,6 +1,6 @@
 # 📱 How to Download & Build this App as an Android APK Using GitHub
 
-This project comes pre-configured with **Automated GitHub Actions** and **Capacitor Android** support to automatically build a downloadable `.apk` file directly on GitHub with zero local Android Studio setup needed.
+This project comes pre-configured with **Automated GitHub Actions** and **Capacitor 7 Android** support to automatically build a downloadable `.apk` file directly on GitHub with zero local Android Studio setup needed.
 
 ---
 
@@ -23,7 +23,7 @@ Whenever you push code or manually run the build workflow on GitHub:
 3. **Download your APK**:
    - Click on the completed workflow run (marked with a green checkmark ✅).
    - Scroll down to the **Artifacts** section at the bottom of the page.
-   - Click **`PalmPay-CashBack-Android-APK`** to download your ready-to-install `.apk` file directly!
+   - Click **`App-Android-APK`** to download your ready-to-install `app-debug.apk` file directly!
    - Transfer or open the `.apk` on your Android device and tap **Install**.
 
 ---
@@ -32,8 +32,9 @@ Whenever you push code or manually run the build workflow on GitHub:
 
 If you have Android Studio installed locally on your machine:
 
-1. Build web production assets:
+1. Install dependencies & build web production assets:
    ```bash
+   npm install --legacy-peer-deps
    npm run build
    ```
 
@@ -55,6 +56,12 @@ If you have Android Studio installed locally on your machine:
 ## ⚙️ Configuration Details
 - **App ID**: `com.palmpay.cashback`
 - **App Name**: `PalmPay CashBack`
-- **Output Artifact**: `PalmPay-CashBack-v1.0.0.apk`
+- **Output Artifact**: `App-Android-APK` (contains `app-debug.apk`)
 - **Workflow File**: `.github/workflows/build-apk.yml`
+- **Capacitor Version**: `7.x`
 - **Capacitor Config**: `capacitor.config.json`
+- **Java SDK**: `21` (Temurin)
+- **Compile / Target SDK**: `35`
+- **Min SDK**: `24`
+- **Gradle Version**: `8.11.1`
+- **Android Gradle Plugin (AGP)**: `8.7.2`

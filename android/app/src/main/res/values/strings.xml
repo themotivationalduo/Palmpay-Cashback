@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PalmPay CashBack</string>
+    <string name="title_activity_main">PalmPay CashBack</string>
+    <string name="package_name">com.palmpay.cashback</string>
+    <string name="custom_url_scheme">com.palmpay.cashback</string>
+</resources>
