@@ -5,24 +5,38 @@
 export const OFFICIAL_DOMAIN = 'https://palmpay-cashback.vercel.app';
 
 /**
- * Returns the full referral URL for a given referral code.
- * Prefers the current window origin when running in browser, with fallback to official domain.
+ * Returns the official referral URL prefix e.g. https://palmpay-cashback.vercel.app/ref/
  */
-export const getReferralUrl = (referralCode: string): string => {
+export const OFFICIAL_REFERRAL_PREFIX = `${OFFICIAL_DOMAIN}/ref/`;
+
+/**
+ * Returns the full official referral URL for a given referral code with the official prefix:
+ * https://palmpay-cashback.vercel.app/ref/REFERRAL_CODE
+ */
+export const getOfficialReferralUrl = (referralCode: string): string => {
   const code = (referralCode || 'PALM2026').trim().toUpperCase();
-  let base = OFFICIAL_DOMAIN;
-  if (typeof window !== 'undefined' && window.location.origin) {
-    base = window.location.origin;
+  return `${OFFICIAL_REFERRAL_PREFIX}${code}`;
+};
+
+/**
+ * Returns the referral URL for a given referral code.
+ * Defaults to the official domain prefix (https://palmpay-cashback.vercel.app/ref/CODE).
+ * If useCurrentOrigin is explicitly true and in browser, uses window.location.origin.
+ */
+export const getReferralUrl = (referralCode: string, useCurrentOrigin = false): string => {
+  const code = (referralCode || 'PALM2026').trim().toUpperCase();
+  if (useCurrentOrigin && typeof window !== 'undefined' && window.location.origin) {
+    return `${window.location.origin}/ref/${code}`;
   }
-  return `${base}/ref/${code}`;
+  return `${OFFICIAL_REFERRAL_PREFIX}${code}`;
 };
 
 /**
  * Returns pre-formatted invitation message ready for WhatsApp, SMS, or Telegram sharing.
  */
-export const getReferralShareMessage = (referralCode: string): string => {
+export const getReferralShareMessage = (referralCode: string, useCurrentOrigin = false): string => {
   const code = (referralCode || 'PALM2026').trim().toUpperCase();
-  const link = getReferralUrl(code);
+  const link = getReferralUrl(code, useCurrentOrigin);
   return `🎉 Claim ₦150,000 PalmPay Cashback bonus instantly!\n\nCreate your free account on the official PalmPay Cashback Portal with my VIP invitation code: ${code}\n\n👉 Click to claim: ${link}`;
 };
 

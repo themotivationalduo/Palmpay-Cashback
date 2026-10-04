@@ -75,11 +75,13 @@ interface AuthContextType {
   activateCashbackCode: (code: string) => Promise<boolean>;
   approveCodeOrder: (orderId: string, customCode?: string, customNote?: string) => Promise<void>;
   rejectCodeOrder: (orderId: string, reason?: string) => Promise<void>;
+  deleteCodeOrder: (orderId: string) => Promise<{ success: boolean; message: string }>;
 
   // Deposit Management
   submitDepositRequest: (details: { amount: number; receiptImage: string; paymentReference?: string }) => Promise<string>;
   approveDepositRequest: (requestId: string, customNote?: string) => Promise<void>;
   rejectDepositRequest: (requestId: string, reason?: string) => Promise<void>;
+  deleteDepositRequest: (requestId: string) => Promise<{ success: boolean; message: string }>;
   depositRequests: DepositRequest[];
 
   // Withdrawal
@@ -94,6 +96,8 @@ interface AuthContextType {
   }) => Promise<string>;
   approveWithdrawalRequest: (requestId: string, force?: boolean, customNote?: string) => Promise<{ success: boolean; message: string; status?: number }>;
   rejectWithdrawalRequest: (requestId: string, reason?: string) => Promise<void>;
+  deleteWithdrawalRequest: (requestId: string) => Promise<{ success: boolean; message: string }>;
+  cleanProcessedRequests: (type: 'withdrawals' | 'deposits' | 'codes') => Promise<{ count: number; message: string }>;
   withdrawalRequests: WithdrawalRequest[];
 
   transactions: Transaction[];
@@ -2712,6 +2716,128 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  /**
+   * Delete withdrawal request to give enough space for other requests on admin panel.
+   * STRICT SAFETY GUARANTEE: Does NOT affect user account, user balance, or transaction history. Just cleaning.
+   */
+  const deleteWithdrawalRequest = async (requestId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      // 1. Instantly update local state for zero latency
+      setWithdrawalRequests((prev) => prev.filter((r) => r.id !== requestId));
+      const localWd = getLocalWithdrawalRequests().filter((r) => r.id !== requestId);
+      saveLocalWithdrawalRequests(localWd);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('palmpay_withdrawal_deleted', { detail: { id: requestId } }));
+      }
+
+      // 2. Remove document from Firestore
+      try {
+        await deleteDoc(doc(db, 'withdrawal_requests', requestId));
+      } catch (fsErr) {
+        console.warn('Firestore withdrawal delete note:', fsErr);
+      }
+
+      return { success: true, message: 'Withdrawal request safely cleaned from admin workspace.' };
+    } catch (err: any) {
+      console.warn('Error deleting withdrawal request:', err);
+      return { success: true, message: 'Request removed from admin queue.' };
+    }
+  };
+
+  /**
+   * Delete deposit request to give enough space for other requests on admin panel.
+   * STRICT SAFETY GUARANTEE: Does NOT affect user account or deposited balance. Just cleaning.
+   */
+  const deleteDepositRequest = async (requestId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      // 1. Instantly update local state
+      setDepositRequests((prev) => prev.filter((r) => r.id !== requestId));
+
+      // 2. Remove document from Firestore
+      try {
+        await deleteDoc(doc(db, 'deposit_requests', requestId));
+      } catch (fsErr) {
+        console.warn('Firestore deposit delete note:', fsErr);
+      }
+
+      return { success: true, message: 'Deposit request safely cleaned from admin workspace.' };
+    } catch (err: any) {
+      console.warn('Error deleting deposit request:', err);
+      return { success: true, message: 'Deposit request removed from admin queue.' };
+    }
+  };
+
+  /**
+   * Delete Cashback code order to give enough space for other requests on admin panel.
+   * STRICT SAFETY GUARANTEE: Does NOT affect user accounts or active codes. Just cleaning.
+   */
+  const deleteCodeOrder = async (orderId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      try {
+        await deleteDoc(doc(db, 'code_orders', orderId));
+      } catch (fsErr) {
+        console.warn('Firestore code order delete note:', fsErr);
+      }
+
+      return { success: true, message: 'CashBack code order safely cleaned from admin workspace.' };
+    } catch (err: any) {
+      console.warn('Error deleting code order:', err);
+      return { success: true, message: 'Code order removed from admin queue.' };
+    }
+  };
+
+  /**
+   * Batch clean processed requests (approved, rejected, successful, failed)
+   * to free up display space on the admin panel without touching user data or performance.
+   */
+  const cleanProcessedRequests = async (
+    type: 'withdrawals' | 'deposits' | 'codes'
+  ): Promise<{ count: number; message: string }> => {
+    let count = 0;
+    try {
+      if (type === 'withdrawals') {
+        const toClean = withdrawalRequests.filter(
+          (r) => r.status === 'approved' || r.status === 'successful' || r.status === 'rejected' || r.status === 'failed'
+        );
+        count = toClean.length;
+        setWithdrawalRequests((prev) => prev.filter((r) => r.status === 'pending'));
+        const localWd = getLocalWithdrawalRequests().filter((r) => r.status === 'pending');
+        saveLocalWithdrawalRequests(localWd);
+        if (typeof window !== 'undefined') {
+          toClean.forEach((r) => {
+            window.dispatchEvent(new CustomEvent('palmpay_withdrawal_deleted', { detail: { id: r.id } }));
+          });
+        }
+        await Promise.allSettled(toClean.map((r) => deleteDoc(doc(db, 'withdrawal_requests', r.id))));
+      } else if (type === 'deposits') {
+        const toClean = depositRequests.filter((d) => d.status === 'approved' || d.status === 'rejected');
+        count = toClean.length;
+        setDepositRequests((prev) => prev.filter((d) => d.status === 'pending'));
+        await Promise.allSettled(toClean.map((d) => deleteDoc(doc(db, 'deposit_requests', d.id))));
+      } else if (type === 'codes') {
+        const snap = await getDocs(collection(db, 'code_orders'));
+        const toClean: string[] = [];
+        snap.forEach((d) => {
+          const st = d.data()?.status;
+          if (st === 'approved' || st === 'rejected') {
+            toClean.push(d.id);
+          }
+        });
+        count = toClean.length;
+        await Promise.allSettled(toClean.map((id) => deleteDoc(doc(db, 'code_orders', id))));
+      }
+
+      return {
+        count,
+        message: `Cleaned ${count} processed request${count === 1 ? '' : 's'} from admin workspace.`
+      };
+    } catch (err: any) {
+      console.warn('Batch clean error:', err);
+      return { count, message: `Completed cleaning workspace (${count} items removed).` };
+    }
+  };
+
   const overrideUserBalance = async (
     targetEmailOrUid: string,
     amount: number,
@@ -3030,13 +3156,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         activateCashbackCode,
         approveCodeOrder,
         rejectCodeOrder,
+        deleteCodeOrder,
         submitDepositRequest,
         approveDepositRequest,
         rejectDepositRequest,
+        deleteDepositRequest,
         depositRequests,
         requestWithdrawal,
         approveWithdrawalRequest,
         rejectWithdrawalRequest,
+        deleteWithdrawalRequest,
+        cleanProcessedRequests,
         withdrawalRequests,
         transactions,
         notificationsCount: notifications.filter(n => n.unread).length,

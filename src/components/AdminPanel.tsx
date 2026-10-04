@@ -80,8 +80,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     rejectWithdrawalRequest,
     approveCodeOrder,
     rejectCodeOrder,
+    deleteCodeOrder,
     depositRequests,
+    deleteDepositRequest,
     withdrawalRequests,
+    deleteWithdrawalRequest,
+    cleanProcessedRequests,
     overrideUserBalance,
     getAllUsersForAdmin
   } = useAuth();
@@ -105,6 +109,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [purgeSuccess, setPurgeSuccess] = useState<boolean>(false);
   const [approvingWithdrawalId, setApprovingWithdrawalId] = useState<string | null>(null);
   const [withdrawalAlert, setWithdrawalAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Request Deletion / Workspace Cleaning state
+  const [requestToDelete, setRequestToDelete] = useState<{
+    type: 'withdrawal' | 'deposit' | 'code';
+    id: string;
+    title: string;
+    userEmail?: string;
+    amount?: number;
+    status: string;
+  } | null>(null);
+  const [isDeletingRequest, setIsDeletingRequest] = useState<boolean>(false);
+  const [cleanFeedback, setCleanFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isCleaningBatch, setIsCleaningBatch] = useState<boolean>(false);
 
   // User Deletion & Freeze state
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
@@ -364,6 +381,78 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  /**
+   * Safely deletes an individual request to free up workspace space on the admin panel.
+   * STRICT SAFETY GUARANTEE: Does NOT affect user accounts, balances, or transactions. Purely cleaning.
+   */
+  const handleConfirmDeleteRequest = async () => {
+    if (!requestToDelete || isDeletingRequest) return;
+    setIsDeletingRequest(true);
+    setCleanFeedback(null);
+
+    const { type, id, title } = requestToDelete;
+    try {
+      if (type === 'withdrawal') {
+        setWithdrawals((prev) => prev.filter((r) => r.id !== id));
+        await deleteWithdrawalRequest(id);
+      } else if (type === 'deposit') {
+        await deleteDepositRequest(id);
+      } else if (type === 'code') {
+        setCodes((prev) => prev.filter((c) => c.id !== id));
+        await deleteCodeOrder(id);
+      }
+
+      setCleanFeedback({
+        type: 'success',
+        message: `"${title}" safely removed. Admin queue space cleaned without affecting user accounts or data.`
+      });
+      setRequestToDelete(null);
+      setTimeout(() => setCleanFeedback(null), 5000);
+    } catch (err: any) {
+      setCleanFeedback({
+        type: 'error',
+        message: err.message || 'Failed to remove request record.'
+      });
+    } finally {
+      setIsDeletingRequest(false);
+    }
+  };
+
+  /**
+   * Batch cleans all processed (approved / rejected / completed) requests
+   * to free up room for new requests on the admin panel.
+   */
+  const handleBatchClean = async (type: 'withdrawals' | 'deposits' | 'codes') => {
+    if (isCleaningBatch) return;
+    const typeLabel = type === 'withdrawals' ? 'Withdrawal' : type === 'deposits' ? 'Deposit' : 'CashBack Code';
+    if (!window.confirm(`Clean all processed (approved, rejected, completed) ${typeLabel} requests?\n\nThis will remove processed items to give enough workspace space for other requests.\n\n✓ User accounts, balances, and data are SAFELY PRESERVED (NOT deleted).`)) {
+      return;
+    }
+
+    setIsCleaningBatch(true);
+    setCleanFeedback(null);
+    try {
+      if (type === 'withdrawals') {
+        setWithdrawals((prev) => prev.filter((r) => r.status === 'pending'));
+      } else if (type === 'codes') {
+        setCodes((prev) => prev.filter((c) => c.status === 'pending'));
+      }
+      const res = await cleanProcessedRequests(type);
+      setCleanFeedback({
+        type: 'success',
+        message: res.message
+      });
+      setTimeout(() => setCleanFeedback(null), 5000);
+    } catch (err: any) {
+      setCleanFeedback({
+        type: 'error',
+        message: err.message || 'Failed to clean processed requests.'
+      });
+    } finally {
+      setIsCleaningBatch(false);
+    }
+  };
+
   useEffect(() => {
     // Helper to merge Firestore snapshots with AuthContext withdrawalRequests and local storage
     const mergeWithdrawals = (firestoreList?: WithdrawalRequest[]) => {
@@ -389,7 +478,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         });
       }
     };
+    const handleWdDeleted = (e: any) => {
+      if (e.detail?.id) {
+        setWithdrawals((prev) => prev.filter((r) => r.id !== e.detail.id));
+      }
+    };
     window.addEventListener('palmpay_withdrawal_created', handleNewWd);
+    window.addEventListener('palmpay_withdrawal_deleted', handleWdDeleted);
 
     try {
       const unsubWithdrawals = onSnapshot(collection(db, 'withdrawal_requests'), (snapshot) => {
@@ -412,6 +507,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       return () => {
         window.removeEventListener('palmpay_withdrawal_created', handleNewWd);
+        window.removeEventListener('palmpay_withdrawal_deleted', handleWdDeleted);
         unsubWithdrawals();
         unsubCodes();
       };
@@ -420,6 +516,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setCodes([]);
       return () => {
         window.removeEventListener('palmpay_withdrawal_created', handleNewWd);
+        window.removeEventListener('palmpay_withdrawal_deleted', handleWdDeleted);
       };
     }
   }, [withdrawalRequests]);
@@ -607,6 +704,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const pendingDepositsCount = depositRequests.filter((d) => d.status === 'pending').length;
   const pendingWithdrawalsCount = withdrawals.filter((w) => w.status === 'pending').length;
+  const processedDepositsCount = depositRequests.filter((d) => d.status !== 'pending').length;
+  const processedWithdrawalsCount = withdrawals.filter((w) => w.status !== 'pending').length;
+  const processedCodesCount = codes.filter((c) => c.status !== 'pending').length;
 
   return (
     <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6 animate-in fade-in min-w-0 overflow-x-hidden pb-12">
@@ -1056,41 +1156,88 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
 
-          {/* Filter Status Selector for Deposits / Withdrawals */}
-          {(currentPage === 'deposits' || currentPage === 'withdrawals') && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <span className="text-xs text-purple-200 font-semibold">
-                Filter by Status:
-              </span>
-
-              <div className="flex items-center gap-1 bg-[#121922] p-1 rounded-xl border border-white/10 text-xs">
-                <button
-                  onClick={() => setFilterStatus('all')}
-                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'all' ? 'bg-white/15 text-white font-bold' : 'text-slate-400'}`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setFilterStatus('pending')}
-                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'pending' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-400'}`}
-                >
-                  Pending
-                </button>
-                <button
-                  onClick={() => setFilterStatus('approved')}
-                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'text-slate-400'}`}
-                >
-                  Approved
-                </button>
-                <button
-                  onClick={() => setFilterStatus('rejected')}
-                  className={`px-2.5 py-1 rounded-lg ${filterStatus === 'rejected' ? 'bg-red-500/20 text-red-300 font-bold' : 'text-slate-400'}`}
-                >
-                  Rejected
-                </button>
+          {/* Filter Status Selector & Workspace Cleaning for Deposits / Withdrawals / Codes */}
+          {(currentPage === 'deposits' || currentPage === 'withdrawals' || currentPage === 'codes') && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-purple-200 font-semibold">
+                  Filter Status:
+                </span>
+                <div className="flex items-center gap-1 bg-[#121922] p-1 rounded-xl border border-white/10 text-xs">
+                  <button
+                    onClick={() => setFilterStatus('all')}
+                    className={`px-2.5 py-1 rounded-lg ${filterStatus === 'all' ? 'bg-white/15 text-white font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('pending')}
+                    className={`px-2.5 py-1 rounded-lg ${filterStatus === 'pending' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Pending
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('approved')}
+                    className={`px-2.5 py-1 rounded-lg ${filterStatus === 'approved' ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Approved
+                  </button>
+                  <button
+                    onClick={() => setFilterStatus('rejected')}
+                    className={`px-2.5 py-1 rounded-lg ${filterStatus === 'rejected' ? 'bg-red-500/20 text-red-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    Rejected
+                  </button>
+                </div>
               </div>
+
+              {/* Clean Processed Requests (Gives enough space for other requests on admin panel with NO effect on user data) */}
+              {((currentPage === 'withdrawals' && processedWithdrawalsCount > 0) ||
+                (currentPage === 'deposits' && processedDepositsCount > 0) ||
+                (currentPage === 'codes' && processedCodesCount > 0)) && (
+                <button
+                  type="button"
+                  disabled={isCleaningBatch}
+                  onClick={() => handleBatchClean(currentPage as 'withdrawals' | 'deposits' | 'codes')}
+                  className="px-3 py-1.5 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-300 hover:text-red-300 border border-white/15 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+                  title="Clean processed requests to give enough space for other requests (User accounts & balances are safely preserved)"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  <span>
+                    Clean Processed ({
+                      currentPage === 'withdrawals' ? processedWithdrawalsCount :
+                      currentPage === 'deposits' ? processedDepositsCount :
+                      processedCodesCount
+                    })
+                  </span>
+                </button>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Cleaning Feedback Toast / Alert */}
+      {cleanFeedback && (
+        <div className={`p-3.5 rounded-2xl flex items-center justify-between gap-3 text-xs animate-in fade-in border ${
+          cleanFeedback.type === 'success'
+            ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-200'
+            : 'bg-rose-950/70 border-rose-500/40 text-rose-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            {cleanFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span className="font-semibold">{cleanFeedback.message}</span>
+          </div>
+          <button
+            onClick={() => setCleanFeedback(null)}
+            className="p-1 rounded-lg hover:bg-white/10 text-white/70 hover:text-white"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -1214,6 +1361,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                     </div>
                   )}
+
+                  {/* Clean Request Action (Gives enough space on admin panel, zero effect on user data) */}
+                  <button
+                    type="button"
+                    onClick={() => setRequestToDelete({
+                      type: 'deposit',
+                      id: dep.id,
+                      title: `Deposit Request (₦${dep.amount.toLocaleString()})`,
+                      userEmail: dep.userEmail,
+                      amount: dep.amount,
+                      status: dep.status
+                    })}
+                    className="w-full py-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all mt-1"
+                    title="Clean request from admin queue (Zero effect on user data)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <span>Clean Request from Queue</span>
+                  </button>
                 </div>
               ))
             )}
@@ -1348,6 +1513,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
                         </div>
                       )}
+
+                      {/* Clean Request from Queue button */}
+                      <button
+                        type="button"
+                        onClick={() => setRequestToDelete({
+                          type: 'deposit',
+                          id: dep.id,
+                          title: `Deposit (₦${dep.amount.toLocaleString()}) - ${dep.userName}`,
+                          userEmail: dep.userEmail,
+                          amount: dep.amount,
+                          status: dep.status
+                        })}
+                        className="p-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 transition-all flex items-center gap-1 text-xs"
+                        title="Clean request from admin workspace"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden xl:inline">Clean</span>
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1601,6 +1784,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <span>Retry Disbursal</span>
                       </button>
                     )}
+
+                    {/* Clean Request Action (Gives enough space on admin panel, zero effect on user data or balance) */}
+                    <button
+                      type="button"
+                      onClick={() => setRequestToDelete({
+                        type: 'withdrawal',
+                        id: req.id,
+                        title: `Withdrawal (₦${req.amount.toLocaleString()}) - ${req.userName}`,
+                        userEmail: req.userEmail,
+                        amount: req.amount,
+                        status: req.status
+                      })}
+                      className="w-full py-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all mt-1"
+                      title="Clean request from admin queue (Zero effect on user data or balance)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      <span>Clean Request from Queue</span>
+                    </button>
                   </div>
                 );
               })
@@ -1856,6 +2057,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               )}
                             </button>
                           )}
+
+                          {/* Clean Request Action (Gives enough space on admin panel, zero effect on user data or balance) */}
+                          <button
+                            type="button"
+                            onClick={() => setRequestToDelete({
+                              type: 'withdrawal',
+                              id: req.id,
+                              title: `Withdrawal (₦${req.amount.toLocaleString()}) - ${req.userName}`,
+                              userEmail: req.userEmail,
+                              amount: req.amount,
+                              status: req.status
+                            })}
+                            className="p-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 transition-all flex items-center gap-1 text-xs"
+                            title="Clean request from admin workspace"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden xl:inline">Clean</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1993,6 +2212,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </button>
                     </div>
                   )}
+
+                  {/* Clean Code Order Action */}
+                  <button
+                    type="button"
+                    onClick={() => setRequestToDelete({
+                      type: 'code',
+                      id: c.id,
+                      title: `Code Order (${c.generatedCode})`,
+                      userEmail: c.userEmail,
+                      amount: c.codePrice || 8550,
+                      status: c.status
+                    })}
+                    className="w-full py-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all mt-1"
+                    title="Clean code order from admin queue (Zero effect on active codes or user accounts)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                    <span>Clean Order from Queue</span>
+                  </button>
                 </div>
               ))
             )}
@@ -2108,6 +2345,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           Ref: {c.paymentReference || 'PAYSTACK'}
                         </span>
                       </div>
+
+                      {/* Clean Code Order Button */}
+                      <button
+                        type="button"
+                        onClick={() => setRequestToDelete({
+                          type: 'code',
+                          id: c.id,
+                          title: `Code Order (${c.generatedCode})`,
+                          userEmail: c.userEmail,
+                          amount: c.codePrice || 8550,
+                          status: c.status
+                        })}
+                        className="p-1.5 sm:p-2 rounded-xl mirror-glass hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 transition-all flex items-center gap-1 text-[10px] sm:text-xs"
+                        title="Clean code order from admin workspace"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden xl:inline">Clean</span>
+                      </button>
                     </div>
                   </div>
                 ))
@@ -3485,6 +3740,104 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <>
                     {userToFreeze.isFrozen ? <Unlock className="w-4 h-4 text-white" /> : <Snowflake className="w-4 h-4 text-white" />}
                     <span>{userToFreeze.isFrozen ? 'Unfreeze Account (Restore Access)' : 'Freeze Account (Suspend Access)'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Clean / Delete Request Confirmation Modal (Just Cleaning - Zero impact on user data or performance) */}
+      {requestToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="mirror-glass-card rounded-3xl border border-red-500/40 p-5 sm:p-7 max-w-md w-full space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => !isDeletingRequest && setRequestToDelete(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-red-600/20 text-red-400 border border-red-500/30">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white font-['Poppins',sans-serif]">
+                  Clean Request Record
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Free up workspace space on the admin panel
+                </p>
+              </div>
+            </div>
+
+            {/* Request Details Box */}
+            <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Item:</span>
+                <span className="text-white font-bold truncate max-w-[200px]">{requestToDelete.title}</span>
+              </div>
+              {requestToDelete.userEmail && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">User:</span>
+                  <span className="text-purple-300 font-mono truncate max-w-[200px]">{requestToDelete.userEmail}</span>
+                </div>
+              )}
+              {requestToDelete.amount !== undefined && (
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Amount:</span>
+                  <span className="text-amber-400 font-mono font-bold">₦{requestToDelete.amount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Status:</span>
+                <span className="text-slate-200 uppercase font-mono font-bold text-[10px] bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                  {requestToDelete.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Crucial Safety Guarantee Notice */}
+            <div className="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-xs text-emerald-200 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Zero Impact on User Data (Just Cleaning)</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-emerald-200/90 pl-1">
+                <li>User account remains active and untouched.</li>
+                <li>User balance and transaction ledger are <strong>safely preserved</strong>.</li>
+                <li>Gives enough clean space on the admin queue for other pending requests.</li>
+                <li>Safe for server performance with instant non-blocking execution.</li>
+              </ul>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isDeletingRequest}
+                onClick={() => setRequestToDelete(null)}
+                className="flex-1 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingRequest}
+                onClick={handleConfirmDeleteRequest}
+                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-500 hover:from-red-500 hover:to-red-600 text-white font-extrabold text-xs shadow-lg transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+              >
+                {isDeletingRequest ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Cleaning...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 text-white" />
+                    <span>Confirm Clean</span>
                   </>
                 )}
               </button>
